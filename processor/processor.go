@@ -115,7 +115,7 @@ func (p *Processor) CleanDomains(mxRecords []MailRecord) {
 	// Iterate over all hosts and resolve duplicates. Use the IP as selector.
 	// All identified IP addresses as resolved from DPUX are used.
 	for _, ipAddress := range ipsInput {
-		log.Infof("Identifying duplicate hosts for IP %s from HTTP responses", ipAddress)
+		log.Debugf("Identifying duplicate hosts for IP %s from HTTP responses", ipAddress)
 		cleanedHosts, duplicates := p.deduplicateByContent(httpxInput, ipAddress)
 		if len(cleanedHosts) > 0 {
 			for _, uniqueHost := range cleanedHosts {
