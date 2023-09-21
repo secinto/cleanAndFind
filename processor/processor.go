@@ -260,6 +260,7 @@ func (p *Processor) FindMailRecords() []MailRecord {
 	}
 
 	data, _ := json.MarshalIndent(mxRecords, "", " ")
+	CreateDirectoryIfNotExists(p.options.BaseFolder + "findings/")
 	WriteToTextFileInProject(p.options.BaseFolder+"findings/mailsecurity.json", string(data))
 
 	return mxRecords

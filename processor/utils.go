@@ -44,6 +44,16 @@ func WriteToTextFileInProject(filename string, data string) {
 	writeFile.Close()
 }
 
+func CreateDirectoryIfNotExists(dir string) error {
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		err = os.MkdirAll(dir, 0o770)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func ConvertStringArrayToString(stringArray []string, separator string) string {
 	sort.Strings(stringArray)
 	justString := strings.Join(stringArray, separator)
