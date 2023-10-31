@@ -81,24 +81,53 @@ func loadConfigFrom(location string) Config {
 
 func (p *Processor) CleanAndFind() error {
 	if p.options.Project != "" {
-		var mxRecords []MailRecord
-		log.Info("Obtaining all mail DNS entries for project")
-		mxRecords = p.FindMailRecords()
-		log.Infof("%d Mail information records have been found", len(mxRecords))
-		log.Infof("Verifying duplications of project %s", p.options.Project)
-		p.CleanDomains(mxRecords)
+		if p.options.File != "" {
+			p.CleanFile()
+		} else {
+			var mxRecords []MailRecord
+			log.Info("Obtaining all mail DNS entries for project")
+			mxRecords = p.FindMailRecords()
+			log.Infof("%d Mail information records have been found", len(mxRecords))
+			log.Infof("Verifying duplications of project %s", p.options.Project)
+			p.CleanDomains(mxRecords)
+		}
 	} else {
 		log.Info("No project specified. Exiting application")
 	}
 	return nil
 }
 
+func (p *Processor) CleanFile() {
+	log.Infof("Using %s as HTTPX input file", p.options.File)
+	httpxInput := GetDocumentFromFile(p.options.File)
+	hostEntries := GetValuesForKey(httpxInput, "host")
+	var ips []string
+	if len(hostEntries) >= 1 {
+		for _, hostEntry := range hostEntries {
+			if value, ok := hostEntry.Value().(string); ok {
+				ips = AppendIfMissing(ips, value)
+			}
+		}
+
+	}
+	var nonDuplicateHosts []string
+	for _, ipAddress := range ips {
+		cleanedHosts, _ := p.deduplicateByContent(httpxInput, ipAddress)
+		for _, uniqueHost := range cleanedHosts {
+			log.Debugf("Adding hostname %s to non duplicates", uniqueHost.Input)
+			nonDuplicateHosts = AppendIfMissing(nonDuplicateHosts, uniqueHost.Input)
+		}
+	}
+	WriteToTextFileInProject(p.options.UniqueHostsFile, strings.Join(nonDuplicateHosts[:], "\n"))
+
+}
+
 func (p *Processor) CleanDomains(mxRecords []MailRecord) {
 	// Get JSON file
+	var httpxInput *jsonquery.Node
 	httpxInputFile := p.options.BaseFolder + "recon/" + appConfig.HttpxDomainsFile
 	log.Infof("Using HTTPX domains input %s", httpxInputFile)
-	httpxInput := GetDocumentFromFile(httpxInputFile)
-
+	httpxInput = GetDocumentFromFile(httpxInputFile)
 	ipsInputFile := p.options.BaseFolder + "recon/" + appConfig.DpuxIPFile
 	log.Infof("Using DPUx IP input %s", ipsInputFile)
 	ipsInput := ReadTxtFileLines(ipsInputFile)
@@ -177,9 +206,9 @@ func (p *Processor) CleanDomains(mxRecords []MailRecord) {
 			log.Infof("Not using ipAddress %s", host)
 		}
 	}
-
 	log.Infof("Found %d non duplicate hosts without port", len(cleanedDomains))
 	cleanedDomainsString := ConvertStringArrayToString(cleanedDomains, "\n")
+
 	WriteToTextFileInProject(p.options.BaseFolder+"domains_clean.txt", cleanedDomainsString)
 
 	log.Infof("Found %d non duplicate hosts with port", len(cleanedDomainsWithPorts))
@@ -193,7 +222,6 @@ func (p *Processor) CleanDomains(mxRecords []MailRecord) {
 	WriteToTextFileInProject(p.options.BaseFolder+"findings/dns_clean.json", string(data))
 
 	log.Info("Created cleaned domains file for project")
-
 }
 
 func (p *Processor) FindMailRecords() []MailRecord {

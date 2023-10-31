@@ -158,6 +158,15 @@ func CreateSimpleDNSEntryFromDPUX(record *jsonquery.Node) DNSRecord {
 	}
 	return entry
 }
+func GetValuesForKey(document *jsonquery.Node, key string) []*jsonquery.Node {
+	entries, error := jsonquery.QueryAll(document, "//"+key)
+
+	if error != nil {
+		log.Errorf("Querying JSON error   #%v ", error)
+	}
+
+	return entries
+}
 
 func GetAllRecordsForKey(document *jsonquery.Node, key string) []*jsonquery.Node {
 	return getAllNodesForKey(document, key)

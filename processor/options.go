@@ -15,13 +15,16 @@ var (
 )
 
 type Options struct {
-	SettingsFile string
-	Project      string
-	BaseFolder   string
-	Silent       bool
-	Version      bool
-	NoColor      bool
-	Verbose      bool
+	SettingsFile    string
+	Project         string
+	File            string
+	BaseFolder      string
+	UniqueHostsFile string
+	JustDedup       bool
+	Silent          bool
+	Version         bool
+	NoColor         bool
+	Verbose         bool
 }
 
 // ParseOptions parses the command line flags provided by a user
@@ -33,10 +36,16 @@ func ParseOptions() *Options {
 
 	flagSet.CreateGroup("input", "Input",
 		flagSet.StringVarP(&options.Project, "project", "p", "", "project name for metadata addition"),
+		flagSet.StringVarP(&options.File, "file", "f", "", "use a specific input file instead of the default one (http_from.domains.output.json). If specified only deduplication is performed."),
+	)
+
+	flagSet.CreateGroup("output", "Output",
+		flagSet.StringVarP(&options.UniqueHostsFile, "uniqueHostsFile", "uhf", "uniqueHosts.txt", "file name to which the unique hosts should be written, only valid if a specific input file has been specified"),
 	)
 
 	flagSet.CreateGroup("config", "Config",
-		flagSet.StringVar(&options.SettingsFile, "config", defaultSettingsLocation, "settings (Yaml) file location"),
+		flagSet.StringVarP(&options.SettingsFile, "config", "c", defaultSettingsLocation, "settings (Yaml) file location"),
+		flagSet.BoolVarP(&options.JustDedup, "dedupOnly", "d", false, "only perform deduplication"),
 	)
 
 	flagSet.CreateGroup("debug", "Debug",
@@ -92,6 +101,9 @@ func (options *Options) validateOptions() error {
 	// Both verbose and silent flags were used
 	if options.Verbose && options.Silent {
 		return errors.New("both verbose and silent mode specified")
+	}
+	if options.File != "" {
+		options.JustDedup = true
 	}
 
 	return nil
