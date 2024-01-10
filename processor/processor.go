@@ -468,7 +468,9 @@ func getBestDuplicateMatch(entries []SimpleHTTPXEntry, project string, tlds map[
 				}
 
 			} else {
-				if port == "443" && (currentBestMatch == SimpleHTTPXEntry{}) {
+				if port == "443" {
+					currentBestMatch = entry
+				} else if (currentBestMatch == SimpleHTTPXEntry{}) {
 					currentBestMatch = entry
 				} else {
 					if _, ok := tlds[host]; !ok {
@@ -483,11 +485,13 @@ func getBestDuplicateMatch(entries []SimpleHTTPXEntry, project string, tlds map[
 		} else if (match == SimpleHTTPXEntry{}) {
 			match = entry
 		} else if (match != SimpleHTTPXEntry{}) {
-			if checkIfHostStringIsContained(entry.Input, wantedHosts, tld) {
+			//If the entry has a lower subdomain count than the existing match, use it (sub.sub.domain.com vs. sub.domain.com)
+			if subDomainCount(match.Input) > subDomainCount(entry.Input) && port == "443" {
 				match = entry
-			}
-			if subDomainCount(match.Input) > subDomainCount(entry.Input) {
-				match = entry
+			} else if subDomainCount(match.Input) == subDomainCount(entry.Input) {
+				if checkIfHostStringIsContained(entry.Input, wantedHosts, tld) && port == "443" {
+					match = entry
+				}
 			}
 		}
 	}
