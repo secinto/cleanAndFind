@@ -41,7 +41,7 @@ type DNSRecord struct {
 	WhoisInfo     string   `json:"WhoisInfo,omitempty"`
 }
 
-type Duplicates struct {
+type Duplicate struct {
 	Hostname       string   `json:"hostname,omitempty"`
 	IP             string   `json:"ip,omitempty"`
 	URL            string   `json:"url,omitempty"`
@@ -53,8 +53,8 @@ type Duplicates struct {
 	DuplicateHosts []string `json:"duplicateHosts,omitempty"`
 }
 
-func getDuplicate(entry SimpleHTTPXEntry) Duplicates {
-	duplicate := Duplicates{
+func getDuplicate(entry SimpleHTTPXEntry) Duplicate {
+	duplicate := Duplicate{
 		Hostname:       entry.Input,
 		IP:             entry.Host,
 		BodyHash:       entry.BodyHash,

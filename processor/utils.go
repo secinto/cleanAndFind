@@ -98,7 +98,7 @@ func getHostAndPort(input string) (string, string) {
 	return host, port
 }
 
-func AppendDuplicatesIfMissing(slice []Duplicates, key Duplicates) []Duplicates {
+func AppendDuplicatesIfMissing(slice []Duplicate, key Duplicate) []Duplicate {
 	for _, element := range slice {
 		if element.Hostname == key.Hostname {
 			log.Debugf("%s already exists in the slice.", key.Hostname)
