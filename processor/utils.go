@@ -136,6 +136,32 @@ func AppendIfMissing(slice []string, key string) []string {
 	}
 	return append(slice, key)
 }
+
+func AppendIfHostMissing(slice []string, key string) []string {
+	for _, element := range slice {
+		var host string
+		port := ""
+		if strings.Contains(key, ":") {
+			host = strings.Split(key, ":")[0]
+			port = strings.Split(key, ":")[1]
+		} else {
+			host = key
+		}
+		if strings.HasPrefix(element, host) {
+			if strings.Contains(element, ":") && element == (host+":"+port) {
+				log.Debugf("%s already exists in the slice.", key)
+				return slice
+			} else if strings.Contains(element, ":") && port == "" {
+				return slice
+			} else if !strings.Contains(element, ":") && port != "" {
+				newSlice := RemoveFromStringArray(slice, element)
+				return append(newSlice, host+":"+port)
+			}
+		}
+	}
+	return append(slice, key)
+}
+
 func AppendSliceIfMissing(slice1 []string, slice2 []string) []string {
 	var slice3 []string
 	if len(slice1) == 0 {

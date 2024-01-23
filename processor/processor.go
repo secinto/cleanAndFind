@@ -197,10 +197,9 @@ func (p *Processor) CleanDomains(mxRecords []MailRecord) {
 		if !checkIfHostStringIsContained(host, unwantedHosts, "") {
 			cleanedDomains = AppendIfMissing(cleanedDomains, host)
 			if port != "" {
-				cleanedDomainsWithPorts = AppendIfMissing(cleanedDomainsWithPorts, host+":"+port)
+				cleanedDomainsWithPorts = AppendIfHostMissing(cleanedDomainsWithPorts, host+":"+port)
 			} else {
-				cleanedDomainsWithPorts = AppendIfMissing(cleanedDomainsWithPorts, host)
-
+				cleanedDomainsWithPorts = AppendIfHostMissing(cleanedDomainsWithPorts, host)
 			}
 		} else {
 			log.Infof("Not using ipAddress %s", host)
