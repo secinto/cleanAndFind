@@ -191,6 +191,8 @@ func (p *Processor) CleanDomains(mxRecords []MailRecord) {
 	var cleanedDomains []string
 	var cleanedDomainsWithPorts []string
 
+	duplicateToNonDuplicateMap := createMapNonDuplicateForDuplicate(duplicateHosts)
+
 	for _, hostEntry := range nonDuplicateHosts {
 		host, port := getHostAndPort(hostEntry)
 
@@ -198,6 +200,12 @@ func (p *Processor) CleanDomains(mxRecords []MailRecord) {
 			cleanedDomains = AppendIfMissing(cleanedDomains, host)
 			if port != "" {
 				cleanedDomainsWithPorts = AppendIfHostMissing(cleanedDomainsWithPorts, host+":"+port)
+				if port == "80" {
+					nonDuplicate := duplicateToNonDuplicateMap[host+":443"]
+					if nonDuplicate != "" {
+						cleanedDomainsWithPorts = AppendIfHostMissing(cleanedDomainsWithPorts, host+":443")
+					}
+				}
 			} else {
 				cleanedDomainsWithPorts = AppendIfHostMissing(cleanedDomainsWithPorts, host)
 			}
@@ -542,4 +550,14 @@ func checkIfHostStringIsContained(host string, hostSlice []string, tld string) b
 	}
 
 	return false
+}
+
+func createMapNonDuplicateForDuplicate(duplicates []Duplicate) map[string]string {
+	var duplicateMap = make(map[string]string)
+	for _, duplicate := range duplicates {
+		for _, duplicateHost := range duplicate.DuplicateHosts {
+			duplicateMap[duplicateHost] = duplicate.Hostname
+		}
+	}
+	return duplicateMap
 }
