@@ -60,7 +60,7 @@ func ConvertStringArrayToString(stringArray []string, separator string) string {
 	return justString
 }
 
-func ExtractDomainAndTldFromString(str string) string {
+func ExtractTLDFromString(str string) string {
 
 	var domainTld string
 
@@ -81,8 +81,16 @@ func ExtractDomainAndTldFromString(str string) string {
 }
 
 func subDomainCount(host string) int {
+	tldParts := strings.Split(ExtractTLDFromString(host), ".")
 	parts := strings.Split(host, ".")
-	return len(parts)
+
+	return len(parts) - len(tldParts)
+}
+
+func hostnameLength(host string) int {
+	parts := strings.Split(host, ".")
+
+	return len(parts[0])
 }
 
 func getHostAndPort(input string) (string, string) {

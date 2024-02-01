@@ -416,34 +416,49 @@ func getBestDuplicateMatch(entries []SimpleHTTPXEntry, project string, tlds map[
 	var port string
 	for _, entry := range entries {
 		host, port = getHostAndPort(entry.Input)
-		tld := ExtractDomainAndTldFromString(host)
+		tld := ExtractTLDFromString(host)
 		// If entry is a top level domain we either use it as current best match, if it is the same as the project.
 		// If not we use it as possible best match if it is an entry with port 443. If not we use it as general
-		if tld == host {
+		if host == tld {
+			//Store each TLD for later processing, in case it gets removed, which should be the case
+			match = entry
+			if _, ok := tlds[host]; !ok {
+				tlds[host] = entry
+			}
 			if tld == project {
-				if (currentBestMatch != SimpleHTTPXEntry{}) {
-					cbmHost, _ := getHostAndPort(currentBestMatch.Input)
-					if _, ok := tlds[cbmHost]; !ok {
-						tlds[cbmHost] = currentBestMatch
-					}
-				}
+				/* Only one can exist (but maybe several times due to ports), verify that !!! */
+				//If no other best match exists, use the current TLD.
 				if port == "443" {
 					currentBestMatch = entry
 				} else if (currentBestMatch == SimpleHTTPXEntry{}) {
 					currentBestMatch = entry
 				}
-
 			} else {
-				if port == "443" {
-					currentBestMatch = entry
-				} else if (currentBestMatch == SimpleHTTPXEntry{}) {
-					currentBestMatch = entry
-				} else {
-					if _, ok := tlds[host]; !ok {
-						tlds[host] = entry
-					}
-					if (possibleBestMatch == SimpleHTTPXEntry{}) {
+				//If the entry has a lower subdomain count than the existing match, use it (sub.sub.domain.com vs. sub.domain.com)
+				currentHost, currentPort := getHostAndPort(possibleBestMatch.Input)
+				if (possibleBestMatch == SimpleHTTPXEntry{}) {
+					possibleBestMatch = entry
+				} else if subDomainCount(possibleBestMatch.Input) > subDomainCount(entry.Input) && port == "443" {
+					possibleBestMatch = entry
+				} else if subDomainCount(possibleBestMatch.Input) == subDomainCount(entry.Input) && port == "443" {
+					if checkIfHostStringIsContained(entry.Input, wantedHosts, tld) {
 						possibleBestMatch = entry
+					} else {
+						if hostnameLength(currentHost) >= hostnameLength(host) || currentPort != port {
+							possibleBestMatch = entry
+						}
+					}
+				} else if port == "443" {
+					if currentPort != port {
+						possibleBestMatch = entry
+					}
+				} else if currentPort != "443" {
+					if checkIfHostStringIsContained(entry.Input, wantedHosts, tld) {
+						match = entry
+					} else if !checkIfHostStringIsContained(match.Input, wantedHosts, tld) {
+						if hostnameLength(currentHost) >= hostnameLength(host) {
+							match = entry
+						}
 					}
 				}
 				log.Debugf("Added non duplicate entry: %s", entry.Input)
@@ -452,10 +467,41 @@ func getBestDuplicateMatch(entries []SimpleHTTPXEntry, project string, tlds map[
 			match = entry
 		} else if (match != SimpleHTTPXEntry{}) {
 			//If the entry has a lower subdomain count than the existing match, use it (sub.sub.domain.com vs. sub.domain.com)
-			if subDomainCount(match.Input) > subDomainCount(entry.Input) && port == "443" {
-				match = entry
-			} else if subDomainCount(match.Input) == subDomainCount(entry.Input) {
-				if checkIfHostStringIsContained(entry.Input, wantedHosts, tld) && port == "443" {
+			currentHost, currentPort := getHostAndPort(match.Input)
+			if tld == project {
+				if subDomainCount(match.Input) >= subDomainCount(entry.Input) && port == "443" {
+					if checkIfHostStringIsContained(entry.Input, wantedHosts, tld) {
+						match = entry
+					} else if !checkIfHostStringIsContained(match.Input, wantedHosts, tld) {
+						if hostnameLength(currentHost) >= hostnameLength(host) || currentPort != port {
+							match = entry
+						}
+					} else if port == "443" && currentPort != port {
+						match = entry
+					}
+				} else if port == "443" && currentPort != port {
+					match = entry
+				} else if currentPort != "443" {
+					if checkIfHostStringIsContained(entry.Input, wantedHosts, tld) {
+						match = entry
+					} else if !checkIfHostStringIsContained(match.Input, wantedHosts, tld) {
+						if hostnameLength(currentHost) >= hostnameLength(host) {
+							match = entry
+						}
+					}
+				}
+			} else {
+				if subDomainCount(match.Input) > subDomainCount(entry.Input) && port == "443" {
+					if checkIfHostStringIsContained(entry.Input, wantedHosts, tld) {
+						match = entry
+					} else if !checkIfHostStringIsContained(match.Input, wantedHosts, tld) {
+						if hostnameLength(currentHost) > hostnameLength(host) || currentPort != port {
+							match = entry
+						}
+					} else if port == "443" && currentPort != port {
+						match = entry
+					}
+				} else if port == "443" && currentPort != port {
 					match = entry
 				}
 			}
