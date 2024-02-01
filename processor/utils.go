@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"reflect"
 	"sort"
 	"strings"
 )
@@ -107,67 +108,84 @@ func getHostAndPort(input string) (string, string) {
 }
 
 func AppendDuplicatesIfMissing(slice []Duplicate, key Duplicate) []Duplicate {
-	for _, element := range slice {
-		if element.Hostname == key.Hostname {
-			log.Debugf("%s already exists in the slice.", key.Hostname)
-			return slice
+	if !reflect.DeepEqual(Duplicate{}, key) && key.Hostname != "" {
+		for _, element := range slice {
+			if element.Hostname == key.Hostname {
+				log.Debugf("%s already exists in the slice.", key.Hostname)
+				return slice
+			}
 		}
+		return append(slice, key)
 	}
-	return append(slice, key)
+	return slice
 }
 
 func AppendDNSRecordIfMissing(slice []DNSRecord, key DNSRecord) []DNSRecord {
-	for _, element := range slice {
-		if element.Host == key.Host {
-			log.Debugf("%s already exists in the slice.", key.Host)
-			return slice
+	if !reflect.DeepEqual(DNSRecord{}, key) && key.Host != "" {
+		for _, element := range slice {
+			if element.Host == key.Host {
+				log.Debugf("%s already exists in the slice.", key.Host)
+				return slice
+			}
 		}
+		return append(slice, key)
 	}
-	return append(slice, key)
+	return slice
 }
 
 func AppendHTTPXEntryIfMissing(entries []SimpleHTTPXEntry, key SimpleHTTPXEntry) []SimpleHTTPXEntry {
-	for _, entry := range entries {
-		if key.Input == entry.Input {
-			return entries
+	if !reflect.DeepEqual(SimpleHTTPXEntry{}, key) && key.Input != "" {
+		if !(key == SimpleHTTPXEntry{}) {
+			for _, entry := range entries {
+				if key.Input == entry.Input {
+					return entries
+				}
+			}
+			return append(entries, key)
 		}
 	}
-	return append(entries, key)
+	return entries
 }
 
 func AppendIfMissing(slice []string, key string) []string {
-	for _, element := range slice {
-		if element == key {
-			log.Debugf("%s already exists in the slice.", key)
-			return slice
+	if key != "" {
+		for _, element := range slice {
+			if element == key {
+				log.Debugf("%s already exists in the slice.", key)
+				return slice
+			}
 		}
+		return append(slice, key)
 	}
-	return append(slice, key)
+	return slice
 }
 
 func AppendIfHostMissing(slice []string, key string) []string {
-	for _, element := range slice {
-		var host string
-		port := ""
-		if strings.Contains(key, ":") {
-			host = strings.Split(key, ":")[0]
-			port = strings.Split(key, ":")[1]
-		} else {
-			host = key
-		}
-		if strings.HasPrefix(element, host) {
-			if strings.Contains(element, ":") && element == (host+":"+port) {
-				log.Debugf("%s already exists in the slice.", key)
-				return slice
-			} else if strings.Contains(element, ":") && port == "" {
-				return slice
-			} else if !strings.Contains(element, ":") && port != "" {
-				newSlice := RemoveFromStringArray(slice, element)
-				return append(newSlice, host+":"+port)
+	if key != "" {
+		for _, element := range slice {
+			var host string
+			port := ""
+			if strings.Contains(key, ":") {
+				host = strings.Split(key, ":")[0]
+				port = strings.Split(key, ":")[1]
+			} else {
+				host = key
+			}
+			if strings.HasPrefix(element, host) {
+				if strings.Contains(element, ":") && element == (host+":"+port) {
+					log.Debugf("%s already exists in the slice.", key)
+					return slice
+				} else if strings.Contains(element, ":") && port == "" {
+					return slice
+				} else if !strings.Contains(element, ":") && port != "" {
+					newSlice := RemoveFromStringArray(slice, element)
+					return append(newSlice, host+":"+port)
+				}
 			}
 		}
+		return append(slice, key)
 	}
-	return append(slice, key)
+	return slice
 }
 
 func AppendSliceIfMissing(slice1 []string, slice2 []string) []string {
@@ -204,20 +222,17 @@ func AppendSliceIfMissingExcept(slice1 []string, slice2 []string, except string)
 		return slice1
 	}
 
-	found := false
-	for _, element2 := range slice2 {
-		for _, element1 := range slice1 {
-			if element2 == element1 {
-				found = true
-				continue
-			}
+	for _, element1 := range slice1 {
+		if element1 != except && element1 != "" {
+			slice3 = AppendIfMissing(slice3, element1)
 		}
-		if found == false && element2 != except {
-			slice3 = append(slice3, element2)
-		}
-		found = false
 	}
-	return append(slice1, slice3...)
+	for _, element2 := range slice2 {
+		if element2 != except && element2 != "" {
+			slice3 = AppendIfMissing(slice3, element2)
+		}
+	}
+	return slice3
 }
 
 func ExistsInStringArray(slice []string, key string) bool {

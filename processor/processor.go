@@ -15,7 +15,7 @@ var (
 	log           = NewLogger()
 	appConfig     Config
 	wantedHosts   = []string{"www", "mail", "portal", "webmail", "dashboard", "login", "remote", "ssh"}
-	unwantedHosts = []string{"autodiscover", "sip", "lyncdiscover", "enterpriseenrollment", "enterpriseregistration", "_dmarc", "s1._domainkey"}
+	unwantedHosts = []string{"autodiscover", "sip", "lyncdiscover", "enterpriseenrollment", "enterpriseregistration", "_dmarc", "s1._domainkey", "msoid"}
 )
 
 //-------------------------------------------
@@ -222,9 +222,11 @@ func (p *Processor) CleanDomains(mxRecords []MailRecord) {
 	cleanedDomainsWithPortsString := ConvertStringArrayToString(cleanedDomainsWithPorts, "\n")
 	WriteToTextFileInProject(p.options.BaseFolder+"domains_clean_with_http_ports.txt", cleanedDomainsWithPortsString)
 
+	log.Infof("Found %d duplicate host entries", len(duplicateHosts))
 	data, _ := json.MarshalIndent(duplicateHosts, "", " ")
 	WriteToTextFileInProject(p.options.BaseFolder+"findings/duplicates.json", string(data))
 
+	log.Infof("Found %d dns records", len(dnsRecords))
 	data, _ = json.MarshalIndent(dnsRecords, "", " ")
 	WriteToTextFileInProject(p.options.BaseFolder+"findings/dns_clean.json", string(data))
 
@@ -312,80 +314,72 @@ func (p *Processor) deduplicateByContent(httpxInput *jsonquery.Node, ipaddress s
 	tlds := make(map[string]SimpleHTTPXEntry)
 	duplicates := make(map[string]Duplicate)
 	cleanAfterWordsAndLines := make(map[string]SimpleHTTPXEntry)
-	if len(hostsOnSameIP) > 0 {
-		// Finding duplicates based on the hash values for the same IP.
-		log.Debugf("Checking duplicates for IP %s", ipaddress)
-		for _, hostEntry := range hostsOnSameIP {
+	for _, hostEntry := range hostsOnSameIP {
+		log.Debugf("Checking hostname %s on %s", hostEntry.Input, ipaddress)
+		if _, ok := cleanAfterHash[hostEntry.BodyHash]; !ok {
+			// TLD other than the project domain are added to tlds. If the project TLD is found
+			// it is returned as best match and must be added manually. If another subdomain is found instead
+			// of the project domain (not in the list) it is also returned as best match and must be added.
+			// If no best match is found the current hostname is added (should only be the case when?)
+			possibleDupes := getSimpleEntriesForBodyHash(hostsOnSameIP, hostEntry.BodyHash)
+			if len(possibleDupes) > 1 {
+				bestMatch := getBestDuplicateMatch(possibleDupes, p.options.Project, tlds)
+				if (bestMatch != SimpleHTTPXEntry{}) {
+					cleanAfterHash[hostEntry.BodyHash] = bestMatch
+				} else {
+					log.Errorf("No best match found for hash")
+					cleanAfterHash[hostEntry.BodyHash] = hostEntry
+				}
+				processDuplicate(duplicates, cleanAfterHash[hostEntry.BodyHash], hostEntry.BodyHash)
+
+			} else {
+				//Only one exists, use it
+				cleanAfterHash[hostEntry.BodyHash] = hostEntry
+				processDuplicate(duplicates, cleanAfterHash[hostEntry.BodyHash], hostEntry.BodyHash)
+			}
+		} else {
+			processDuplicate(duplicates, cleanAfterWordsAndLines[hostEntry.BodyHash], hostEntry.BodyHash)
+		}
+	}
+	// Also find duplicates based on the words and lines from the HTTP response. If they are the same
+	// for the same IP it is very likely that the content is the same although some minor thing changed
+	// and therefore the hash changed. (Used IP, hostname or some other changes such as generated Javascript)
+	// See austria-beteiligungen (hvw-wegraz.at), jaw.or.at for reasons.
+	for _, hostEntry := range cleanAfterHash {
+		//Process each entry from cleanAfterHash array
+		//Generate the key for the current entry
+		key := strconv.Itoa(hostEntry.Words) + "-" + strconv.Itoa(hostEntry.Lines)
+		if len(cleanAfterHash) > 1 {
 			log.Debugf("Checking hostname %s", hostEntry.Input)
-			if _, ok := cleanAfterHash[hostEntry.BodyHash]; !ok {
-				// TLD other than the project domain are added to tlds. If the project TLD is found
-				// it is returned as best match and must be added manually. If another subdomain is found instead
-				// of the project domain (not in the list) it is also returned as best match and must be added.
-				// If no best match is found the current hostname is added (should only be the case when?)
-				possibleDupes := getSimpleEntriesForBodyHash(hostsOnSameIP, hostEntry.BodyHash)
+			if _, ok := cleanAfterWordsAndLines[key]; !ok {
+				possibleDupes := getSimpleEntriesForMetrics(cleanAfterHash, hostEntry)
 				if len(possibleDupes) > 1 {
 					bestMatch := getBestDuplicateMatch(possibleDupes, p.options.Project, tlds)
 					if (bestMatch != SimpleHTTPXEntry{}) {
-						cleanAfterHash[hostEntry.BodyHash] = bestMatch
+						// Use the best match
+						cleanAfterWordsAndLines[key] = bestMatch
 					} else {
-						cleanAfterHash[hostEntry.BodyHash] = hostEntry
-					}
-					// Create the base entry for the duplicates. All duplicates of the bodyHash are associated with this entry
-					duplicate := getDuplicate(cleanAfterHash[hostEntry.BodyHash])
-					if duplicate.Hostname != hostEntry.Input {
-						duplicate.DuplicateHosts = AppendIfMissing(duplicate.DuplicateHosts, hostEntry.Input)
-					}
-					duplicates[hostEntry.BodyHash] = duplicate
-				} else {
-					//Only one exists, use it
-					cleanAfterHash[hostEntry.BodyHash] = hostEntry
-				}
-			} else {
-				//All other are duplicates
-				duplicate := duplicates[hostEntry.BodyHash]
-				if reflect.DeepEqual(Duplicate{}, duplicate) {
-					duplicate = getDuplicate(hostEntry)
-				}
-				if duplicate.Hostname != hostEntry.Input {
-					duplicate.DuplicateHosts = AppendIfMissing(duplicate.DuplicateHosts, hostEntry.Input)
-				}
-				duplicates[hostEntry.BodyHash] = duplicate
-			}
-		}
-		// Also find duplicates based on the words and lines from the HTTP response. If they are the same
-		// for the same IP it is very likely that the content is the same although some minor thing changed
-		// and therefore the hash changed. (Used IP, hostname or some other changes such as generated Javascript)
-		// See austria-beteiligungen (hvw-wegraz.at), jaw.or.at for reasons.
-		for _, hostEntry := range cleanAfterHash {
-			key := strconv.Itoa(hostEntry.Words) + "-" + strconv.Itoa(hostEntry.Lines)
-			if len(cleanAfterHash) > 1 {
-				log.Debugf("Checking hostname %s", hostEntry.Input)
-				if _, ok := cleanAfterWordsAndLines[key]; !ok {
-					possibleDupes := getSimpleEntriesForMetrics(cleanAfterHash, hostEntry)
-					if len(possibleDupes) > 1 {
-						bestMatch := getBestDuplicateMatch(possibleDupes, p.options.Project, tlds)
-						if (bestMatch != SimpleHTTPXEntry{}) {
-							// Use the best match
-							cleanAfterWordsAndLines[key] = bestMatch
-						} else {
-							// If empty, meaning no best match found, use the current one.
-							cleanAfterWordsAndLines[key] = hostEntry
-						}
-						processDuplicate(duplicates, cleanAfterWordsAndLines[key], key)
-					} else {
-						//Only one entry exists, use it.
+						// If empty, meaning no best match found, use the current one.
+						log.Errorf("No best match found for words and lines")
 						cleanAfterWordsAndLines[key] = hostEntry
-						// Create the base entry for the duplicates. All duplicates of the words and lines are associated with this entry
+					}
+					processDuplicate(duplicates, cleanAfterWordsAndLines[key], key)
+					if cleanAfterWordsAndLines[key].Input != hostEntry.Input {
 						processDuplicate(duplicates, hostEntry, key)
 					}
 				} else {
-					// All other are duplicates
+					//Only one entry exists, no duplicates, use it.
+					cleanAfterWordsAndLines[key] = hostEntry
 					processDuplicate(duplicates, hostEntry, key)
 				}
 			} else {
-				cleanAfterWordsAndLines[key] = hostEntry
+				// All other are duplicates
 				processDuplicate(duplicates, hostEntry, key)
 			}
+		} else {
+			/* If for this IP only one entry exists just use it. */
+			cleanAfterWordsAndLines[key] = hostEntry
+			processDuplicate(duplicates, hostEntry, key)
 		}
 	}
 	// Add the filtered list to nonduplicate ones.
@@ -421,7 +415,6 @@ func getBestDuplicateMatch(entries []SimpleHTTPXEntry, project string, tlds map[
 		// If not we use it as possible best match if it is an entry with port 443. If not we use it as general
 		if host == tld {
 			//Store each TLD for later processing, in case it gets removed, which should be the case
-			match = entry
 			if _, ok := tlds[host]; !ok {
 				tlds[host] = entry
 			}
@@ -434,75 +427,29 @@ func getBestDuplicateMatch(entries []SimpleHTTPXEntry, project string, tlds map[
 					currentBestMatch = entry
 				}
 			} else {
-				//If the entry has a lower subdomain count than the existing match, use it (sub.sub.domain.com vs. sub.domain.com)
-				currentHost, currentPort := getHostAndPort(possibleBestMatch.Input)
 				if (possibleBestMatch == SimpleHTTPXEntry{}) {
 					possibleBestMatch = entry
-				} else if subDomainCount(possibleBestMatch.Input) > subDomainCount(entry.Input) && port == "443" {
-					possibleBestMatch = entry
-				} else if subDomainCount(possibleBestMatch.Input) == subDomainCount(entry.Input) && port == "443" {
-					if checkIfHostStringIsContained(entry.Input, wantedHosts, tld) {
-						possibleBestMatch = entry
-					} else {
-						if hostnameLength(currentHost) >= hostnameLength(host) || currentPort != port {
-							possibleBestMatch = entry
-						}
-					}
-				} else if port == "443" {
-					if currentPort != port {
-						possibleBestMatch = entry
-					}
-				} else if currentPort != "443" {
-					if checkIfHostStringIsContained(entry.Input, wantedHosts, tld) {
-						match = entry
-					} else if !checkIfHostStringIsContained(match.Input, wantedHosts, tld) {
-						if hostnameLength(currentHost) >= hostnameLength(host) {
-							match = entry
-						}
+				} else {
+					_, currentPort := getHostAndPort(possibleBestMatch.Input)
+					if port == "443" {
+						possibleBestMatch = getInnerBestMatch(project, possibleBestMatch, entry)
+					} else if currentPort != "443" {
+						possibleBestMatch = getInnerBestMatch(project, possibleBestMatch, entry)
 					}
 				}
-				log.Debugf("Added non duplicate entry: %s", entry.Input)
 			}
-		} else if (match == SimpleHTTPXEntry{}) {
-			match = entry
-		} else if (match != SimpleHTTPXEntry{}) {
-			//If the entry has a lower subdomain count than the existing match, use it (sub.sub.domain.com vs. sub.domain.com)
-			currentHost, currentPort := getHostAndPort(match.Input)
-			if tld == project {
-				if subDomainCount(match.Input) >= subDomainCount(entry.Input) && port == "443" {
-					if checkIfHostStringIsContained(entry.Input, wantedHosts, tld) {
-						match = entry
-					} else if !checkIfHostStringIsContained(match.Input, wantedHosts, tld) {
-						if hostnameLength(currentHost) >= hostnameLength(host) || currentPort != port {
-							match = entry
-						}
-					} else if port == "443" && currentPort != port {
-						match = entry
-					}
-				} else if port == "443" && currentPort != port {
-					match = entry
-				} else if currentPort != "443" {
-					if checkIfHostStringIsContained(entry.Input, wantedHosts, tld) {
-						match = entry
-					} else if !checkIfHostStringIsContained(match.Input, wantedHosts, tld) {
-						if hostnameLength(currentHost) >= hostnameLength(host) {
-							match = entry
-						}
-					}
-				}
+		} else {
+			/* If none exists use it */
+			if (match == SimpleHTTPXEntry{}) {
+				match = entry
 			} else {
-				if subDomainCount(match.Input) > subDomainCount(entry.Input) && port == "443" {
-					if checkIfHostStringIsContained(entry.Input, wantedHosts, tld) {
-						match = entry
-					} else if !checkIfHostStringIsContained(match.Input, wantedHosts, tld) {
-						if hostnameLength(currentHost) > hostnameLength(host) || currentPort != port {
-							match = entry
-						}
-					} else if port == "443" && currentPort != port {
-						match = entry
-					}
-				} else if port == "443" && currentPort != port {
-					match = entry
+				//Check if it should be used either if the port is 443 or the port of the currently and
+				//the port to check are not 443. Otherwise stay with as it is.
+				_, currentPort := getHostAndPort(match.Input)
+				if port == "443" {
+					match = getInnerBestMatch(project, match, entry)
+				} else if currentPort != "443" {
+					match = getInnerBestMatch(project, match, entry)
 				}
 			}
 		}
@@ -519,6 +466,40 @@ func getBestDuplicateMatch(entries []SimpleHTTPXEntry, project string, tlds map[
 
 	log.Debugf("Found best match for duplicates with hash %s or words %d and lines %d is host %s", match.BodyHash, match.Words, match.Lines, match.Input)
 	return match
+}
+
+func getInnerBestMatch(project string, currentMatch SimpleHTTPXEntry, entryToCheck SimpleHTTPXEntry) SimpleHTTPXEntry {
+	var match SimpleHTTPXEntry
+	currentHost, _ := getHostAndPort(currentMatch.Input)
+	host, _ := getHostAndPort(entryToCheck.Input)
+	tldCurrent := ExtractTLDFromString(currentHost)
+	tldEntry := ExtractTLDFromString(host)
+	if tldEntry == project || tldCurrent != project {
+		if subDomainCount(currentHost) >= subDomainCount(host) {
+			if checkIfHostStringIsContained(host, wantedHosts, tldEntry) {
+				match = entryToCheck
+			} else if !checkIfHostStringIsContained(currentHost, wantedHosts, tldCurrent) {
+				if hostnameLength(currentHost) >= hostnameLength(host) {
+					match = entryToCheck
+				}
+			}
+		}
+	} else {
+		if subDomainCount(currentHost) > subDomainCount(host) {
+			if checkIfHostStringIsContained(host, wantedHosts, tldEntry) {
+				match = entryToCheck
+			} else if !checkIfHostStringIsContained(currentHost, wantedHosts, tldCurrent) {
+				if hostnameLength(currentHost) > hostnameLength(host) {
+					match = entryToCheck
+				}
+			}
+		}
+	}
+	if !(match == SimpleHTTPXEntry{}) {
+		return match
+	} else {
+		return currentMatch
+	}
 }
 
 func getSimpleEntriesForBodyHash(entries []SimpleHTTPXEntry, bodyHash string) []SimpleHTTPXEntry {
@@ -540,7 +521,10 @@ func getSimpleEntriesForMetrics(entries map[string]SimpleHTTPXEntry, match Simpl
 		} else {
 			difference = match.ContentLength - entry.ContentLength
 		}
-		if entry.Words == match.Words && entry.Lines == match.Lines && difference > 50 {
+		if entry.Words == match.Words && entry.Lines == match.Lines {
+			if difference > 50 {
+				log.Infof("Uses possible duplicate %s despite difference in length of %d", entry.Input, difference)
+			}
 			filteredEntries = append(filteredEntries, entry)
 		}
 	}
@@ -558,20 +542,11 @@ func processDuplicate(duplicates map[string]Duplicate, currentEntry SimpleHTTPXE
 	//If empty create new one
 	if reflect.DeepEqual(Duplicate{}, duplicate) {
 		duplicate = getDuplicate(currentEntry)
-	}
-	if duplicate.Hostname != currentEntry.Input {
+	} else if duplicate.Hostname != currentEntry.Input {
 		duplicate.DuplicateHosts = AppendIfMissing(duplicate.DuplicateHosts, currentEntry.Input)
 	}
 	//If a duplicate for the body hash already exists, inline it to the new duplicates entry
 	if !reflect.DeepEqual(Duplicate{}, duplicates[currentEntry.BodyHash]) {
-		if duplicate.Hostname != duplicates[duplicate.BodyHash].Hostname && strings.HasSuffix(duplicate.Hostname, "443") {
-			//The current entry is the HTTPs one, the one from the body hash is added to the duplicate hosts list
-			duplicate.DuplicateHosts = AppendIfMissing(duplicate.DuplicateHosts, duplicates[duplicate.BodyHash].Hostname)
-		} else if duplicate.Hostname != duplicates[duplicate.BodyHash].Hostname && strings.HasSuffix(duplicates[duplicate.BodyHash].Hostname, "443") {
-			//The entry from the body hash is the HTTPS version, thus use this one.
-			duplicate.DuplicateHosts = AppendIfMissing(duplicate.DuplicateHosts, duplicate.Hostname)
-			duplicate.Hostname = duplicates[duplicate.BodyHash].Hostname
-		}
 		duplicate.DuplicateHosts = AppendSliceIfMissingExcept(duplicate.DuplicateHosts, duplicates[currentEntry.BodyHash].DuplicateHosts, duplicate.Hostname)
 		delete(duplicates, currentEntry.BodyHash)
 	}
