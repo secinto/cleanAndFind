@@ -15,7 +15,7 @@ var (
 	log           = NewLogger()
 	appConfig     Config
 	wantedHosts   = []string{"www", "mail", "portal", "webmail", "dashboard", "login", "remote", "ssh"}
-	unwantedHosts = []string{"autodiscover", "sip", "lyncdiscover", "enterpriseenrollment", "enterpriseregistration", "_dmarc", "s1._domainkey", "msoid"}
+	unwantedHosts = []string{"autodiscover", "sip", "lyncdiscover", "enterpriseenrollment", "enterpriseregistration", "_._msdcs", "_dmarc", "s1._domainkey", "msoid"}
 )
 
 //-------------------------------------------
