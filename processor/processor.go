@@ -15,7 +15,7 @@ var (
 	log           = NewLogger()
 	appConfig     Config
 	wantedHosts   = []string{"www", "mail", "portal", "webmail", "dashboard", "login", "remote", "ssh"}
-	unwantedHosts = []string{"autodiscover", "sip", "lyncdiscover", "enterpriseenrollment", "enterpriseregistration", "_", "_dmarc", "s1", "msoid"}
+	unwantedHosts = []string{"autodiscover", "sip", "lyncdiscover", "enterpriseenrollment", "enterpriseregistration", "_domainkey", "_dmarc", "msoid"}
 )
 
 //-------------------------------------------
@@ -272,13 +272,25 @@ func (p *Processor) FindMailRecords() []MailRecord {
 					}
 				}
 
-				dkimEntries := getAllNodesByContains(input, "host", []string{"_domainkey." + hostEntries[0]})
+				dkimEntries := getAllEntriesByContains(input, "host", []string{"_domainkey." + hostEntries[0]})
 				if len(dkimEntries) > 0 {
-					var entries []string
+					var entries []DKIM
 					for _, dkimEntry := range dkimEntries {
-						dkimValue := getValuesFromNode(dkimEntry.Parent, "txt")
-						if len(dkimValue) > 0 {
-							entries = append(entries, strings.Join(dkimValue, ""))
+						if hostName, ok := dkimEntry.Value().(string); ok {
+							entry := DKIM{Selector: hostName}
+
+							txtValue := getValuesFromNode(dkimEntry.Parent, "txt")
+
+							if len(txtValue) > 0 {
+								entry.TXT = strings.Join(txtValue, "")
+							}
+							cnameValue := getValuesFromNode(dkimEntry.Parent, "cname")
+							if len(cnameValue) > 0 {
+								entry.CNAME = strings.Join(cnameValue, "")
+							}
+							entries = append(entries, entry)
+						} else {
+							log.Errorf("Found DKIM entry which couldn't be resolved to a host name. %s", dkimEntry)
 						}
 					}
 					if len(entries) > 0 {

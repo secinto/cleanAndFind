@@ -4,19 +4,11 @@ import (
 	"bufio"
 	"io"
 	"math/rand"
-	"net/http"
 	"net/url"
 	"os"
 	"reflect"
 	"sort"
 	"strings"
-)
-
-var (
-	client = http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		}}
 )
 
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")

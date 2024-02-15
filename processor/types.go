@@ -30,7 +30,13 @@ type MailRecord struct {
 	MXRecords   []string `json:"MXRecords"`
 	SPFEntry    string   `json:"SPFEntry,omitempty"`
 	DMARCEntry  string   `json:"DMARCEntry,omitempty"`
-	DKIMEntries []string `json:"DKIMEntries,omitempty"`
+	DKIMEntries []DKIM   `json:"DKIMEntries,omitempty"`
+}
+
+type DKIM struct {
+	Selector string
+	TXT      string
+	CNAME    string
 }
 
 type DNSRecord struct {

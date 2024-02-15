@@ -223,6 +223,25 @@ func getAllNodesByContains(document *jsonquery.Node, queryKey string, queryConta
 	return results
 }
 
+func getAllEntriesByContains(document *jsonquery.Node, queryKey string, queryContains []string) []*jsonquery.Node {
+
+	var results []*jsonquery.Node
+
+	for _, query := range queryContains {
+		entries, error := jsonquery.QueryAll(document, "//./"+queryKey+"[contains(.,'"+query+"')]")
+
+		if error != nil {
+			log.Errorf("Querying JSON error   #%v ", error)
+		}
+
+		for _, entry := range entries {
+			results = append(results, entry)
+		}
+	}
+
+	return results
+}
+
 // {"queryKey":"query" => "key":...}
 func getNodesFromSpecificQueryViaEquals(document *jsonquery.Node, queryKey string, query string) []*jsonquery.Node {
 	//var result []string
