@@ -1,9 +1,9 @@
 package processor
 
-const VERSION = "0.2.4"
+const VERSION = "0.2.5"
 
 type Config struct {
-	S2SPath          string `yaml:"s2s_path,omitempty"`
+	ProjectsPath     string `yaml:"projects_path,omitempty"`
 	HttpxDomainsFile string `yaml:"httpx_domains,omitempty"`
 	DpuxFile         string `yaml:"dpux,omitempty"`
 	DpuxIPFile       string `yaml:"dpux_ip,omitempty"`
