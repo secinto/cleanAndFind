@@ -27,6 +27,7 @@ type Options struct {
 	Version         bool
 	NoColor         bool
 	Verbose         bool
+	Debug           bool
 }
 
 // ParseOptions parses the command line flags provided by a user
@@ -55,6 +56,7 @@ func ParseOptions() *Options {
 	flagSet.CreateGroup("debug", "Debug",
 		flagSet.BoolVar(&options.Silent, "silent", false, "show only results in output"),
 		flagSet.BoolVar(&options.Version, "version", false, "show version of the project"),
+		flagSet.BoolVar(&options.Debug, "d", false, "show Debug output"),
 		flagSet.BoolVar(&options.Verbose, "v", false, "show verbose output"),
 		flagSet.BoolVarP(&options.NoColor, "no-color", "nc", false, "disable colors in output"),
 	)
@@ -82,6 +84,9 @@ func ParseOptions() *Options {
 }
 
 func (options *Options) configureOutput() {
+	if options.Debug {
+		log.SetLevel(logrus.DebugLevel)
+	}
 	if options.Verbose {
 		log.SetLevel(logrus.TraceLevel)
 	}
