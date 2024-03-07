@@ -20,7 +20,9 @@ type Options struct {
 	File            string
 	BaseFolder      string
 	UniqueHostsFile string
-	JustDedup       bool
+	OnlyClean       bool
+	OnlyDedup       bool
+	UseCleanedDNS   bool
 	Silent          bool
 	Version         bool
 	NoColor         bool
@@ -45,7 +47,9 @@ func ParseOptions() *Options {
 
 	flagSet.CreateGroup("config", "Config",
 		flagSet.StringVarP(&options.SettingsFile, "config", "c", defaultSettingsLocation, "settings (Yaml) file location"),
-		flagSet.BoolVarP(&options.JustDedup, "dedupOnly", "d", false, "only perform deduplication"),
+		flagSet.BoolVarP(&options.OnlyDedup, "onlyDedup", "od", false, "only perform deduplication (no cleaning)"),
+		flagSet.BoolVarP(&options.OnlyClean, "onlyClean", "oc", false, "only perform DNS file creation (no deduplication)"),
+		flagSet.BoolVarP(&options.UseCleanedDNS, "useCleanedDNS", "ucd", false, "use the cleaned and deduplicated host information to create DNS file (dns_clean.json)"),
 	)
 
 	flagSet.CreateGroup("debug", "Debug",
@@ -103,7 +107,7 @@ func (options *Options) validateOptions() error {
 		return errors.New("both verbose and silent mode specified")
 	}
 	if options.File != "" {
-		options.JustDedup = true
+		options.OnlyDedup = true
 	}
 
 	return nil

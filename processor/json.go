@@ -3,6 +3,7 @@ package processor
 import (
 	"github.com/antchfx/jsonquery"
 	"os"
+	"secinto/checkfix_utils"
 	"strings"
 )
 
@@ -11,7 +12,7 @@ func GetDocumentFromFile(filename string) *jsonquery.Node {
 	if err != nil {
 		log.Fatalf("Reading JSON input file failed: %s %s", err.Error(), filename)
 	}
-	jsonlString := ConvertJSONLtoJSON(string(data))
+	jsonlString := checkfix_utils.ConvertJSONLtoJSON(string(data))
 	jsonReader := strings.NewReader(jsonlString)
 	input, err := jsonquery.Parse(jsonReader)
 	if err != nil {
@@ -38,12 +39,12 @@ func GetHTTPXEntryForIPAddress(document *jsonquery.Node, ipaddress string) []Sim
 }
 
 func GetDNSRecordForIPAddress(document *jsonquery.Node, ipaddress string) DNSRecord {
-	entriesForHost, error := jsonquery.Query(document, "//*/a[contains(.,'"+ipaddress+"')]")
+	entriesForHost, err := jsonquery.Query(document, "//*/a[contains(.,'"+ipaddress+"')]")
 
 	entry := DNSRecord{}
 
-	if error != nil {
-		log.Errorf("Querying JSON error   #%v ", error)
+	if err != nil {
+		log.Errorf("Querying JSON error   #%v ", err)
 	} else {
 		if entriesForHost != nil {
 			log.Debugf("Entries for host %s are # %d", ipaddress, entriesForHost.Type)
@@ -157,99 +158,4 @@ func CreateSimpleDNSEntryFromDPUX(record *jsonquery.Node) DNSRecord {
 		entry = DNSRecord{}
 	}
 	return entry
-}
-func GetValuesForKey(document *jsonquery.Node, key string) []*jsonquery.Node {
-	entries, error := jsonquery.QueryAll(document, "//"+key)
-
-	if error != nil {
-		log.Errorf("Querying JSON error   #%v ", error)
-	}
-
-	return entries
-}
-
-func GetAllRecordsForKey(document *jsonquery.Node, key string) []*jsonquery.Node {
-	return getAllNodesForKey(document, key)
-}
-
-func getAllNodesForKey(document *jsonquery.Node, key string) []*jsonquery.Node {
-	entries, error := jsonquery.QueryAll(document, "//*["+key+"]")
-
-	if error != nil {
-		log.Errorf("Querying JSON error   #%v ", error)
-	}
-
-	return entries
-}
-
-func getValuesFromNode(node *jsonquery.Node, key string) []string {
-	var result []string
-
-	if entryValues, ok := node.Value().(map[string]interface{}); ok {
-		values, exists := entryValues[key]
-		if exists {
-			if entries, ok := values.([]interface{}); ok {
-				for _, subValues := range entries {
-					if subValue, ok := subValues.(string); ok {
-						result = AppendIfMissing(result, subValue)
-					}
-				}
-			} else {
-				if entry, ok := values.(string); ok {
-					result = AppendIfMissing(result, entry)
-				}
-			}
-		}
-	}
-	return result
-}
-
-func getAllNodesByContains(document *jsonquery.Node, queryKey string, queryContains []string) []*jsonquery.Node {
-
-	var results []*jsonquery.Node
-
-	for _, query := range queryContains {
-		entries, error := jsonquery.QueryAll(document, "//*/"+queryKey+"[contains(.,'"+query+"')]")
-
-		if error != nil {
-			log.Errorf("Querying JSON error   #%v ", error)
-		}
-
-		for _, entry := range entries {
-			results = append(results, entry)
-		}
-	}
-
-	return results
-}
-
-func getAllEntriesByContains(document *jsonquery.Node, queryKey string, queryContains []string) []*jsonquery.Node {
-
-	var results []*jsonquery.Node
-
-	for _, query := range queryContains {
-		entries, error := jsonquery.QueryAll(document, "//./"+queryKey+"[contains(.,'"+query+"')]")
-
-		if error != nil {
-			log.Errorf("Querying JSON error   #%v ", error)
-		}
-
-		for _, entry := range entries {
-			results = append(results, entry)
-		}
-	}
-
-	return results
-}
-
-// {"queryKey":"query" => "key":...}
-func getNodesFromSpecificQueryViaEquals(document *jsonquery.Node, queryKey string, query string) []*jsonquery.Node {
-	//var result []string
-
-	entries, error := jsonquery.QueryAll(document, "*["+queryKey+"='"+query+"']")
-
-	if error != nil {
-		log.Errorf("Querying JSON error   #%v ", error)
-	}
-	return entries
 }

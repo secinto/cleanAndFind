@@ -1,6 +1,6 @@
 package processor
 
-const VERSION = "0.2.5"
+const VERSION = "0.3.0"
 
 type Config struct {
 	ProjectsPath     string `yaml:"projects_path,omitempty"`
