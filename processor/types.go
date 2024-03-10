@@ -29,7 +29,7 @@ type MailRecord struct {
 	Host        string   `json:"Host"`
 	MXRecords   []string `json:"MXRecords"`
 	SPFEntry    string   `json:"SPFEntry,omitempty"`
-	DMARCEntry  string   `json:"DMARCEntry,omitempty"`
+	DMARCEntry  []string `json:"DMARCEntry,omitempty"`
 	DKIMEntries []DKIM   `json:"DKIMEntries,omitempty"`
 }
 

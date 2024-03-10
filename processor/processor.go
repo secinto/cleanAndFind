@@ -296,10 +296,10 @@ func (p *Processor) FindMailRecords() []MailRecord {
 				}
 				// Check if an DMARC entry exists for the current host
 				dmarcEntries := checkfix_utils.GetNodesFromSpecificQueryViaEquals(input, "host", "_dmarc."+hostEntries[0])
-				if len(dmarcEntries) > 0 {
-					dmarcEntry := checkfix_utils.GetValuesFromNode(dmarcEntries[0], "txt")
+				for _, entry := range dmarcEntries {
+					dmarcEntry := checkfix_utils.GetValuesFromNode(entry, "txt")
 					if dmarcEntry != nil {
-						mxRecord.DMARCEntry = dmarcEntry[0]
+						mxRecord.DMARCEntry = append(mxRecord.DMARCEntry, dmarcEntry...)
 					}
 				}
 
