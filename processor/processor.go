@@ -89,12 +89,16 @@ func (p *Processor) CleanAndFind() error {
 				log.Infof("Creating dns_clean file from DPUx input.")
 				p.CleanDNSEntries()
 			} else {
+				// Perform all functions.
 				var mxRecords []MailRecord
 				log.Info("Obtaining all mail DNS entries for project")
 				mxRecords = p.FindMailRecords()
 				log.Infof("%d Mail information records have been found", len(mxRecords))
 				log.Infof("Verifying duplications of project %s", p.options.Project)
 				p.CleanDomains(mxRecords, p.options.UseCleanedDNS)
+				if !p.options.UseCleanedDNS {
+					p.CleanDNSEntries()
+				}
 			}
 		}
 	} else {

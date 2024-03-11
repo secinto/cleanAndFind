@@ -48,7 +48,6 @@ func ParseOptions() *Options {
 
 	flagSet.CreateGroup("config", "Config",
 		flagSet.StringVarP(&options.SettingsFile, "config", "c", defaultSettingsLocation, "settings (Yaml) file location"),
-		flagSet.BoolVarP(&options.OnlyDedup, "onlyDedup", "od", false, "only perform deduplication (no cleaning)"),
 		flagSet.BoolVarP(&options.OnlyClean, "onlyClean", "oc", false, "only perform DNS file creation (no deduplication)"),
 		flagSet.BoolVarP(&options.UseCleanedDNS, "useCleanedDNS", "ucd", false, "use the cleaned and deduplicated host information to create DNS file (dns_clean.json)"),
 	)
