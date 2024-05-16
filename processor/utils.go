@@ -6,6 +6,40 @@ import (
 	"strings"
 )
 
+func AppendIfMissing(entries []string, key string) []string {
+	if key != "" {
+		for _, entry := range entries {
+			if key == entry {
+				return entries
+			}
+		}
+		return append(entries, key)
+	}
+	return entries
+}
+
+func AppendIfMissingAll(entries []string, keys ...string) []string {
+	var exists bool
+	if len(keys) > 0 {
+		if len(entries) > 0 {
+			for _, key := range keys {
+				exists = false
+				for _, entry := range entries {
+					if key == entry {
+						exists = true
+					}
+				}
+				if !exists {
+					entries = append(entries, key)
+				}
+			}
+		} else {
+			return keys
+		}
+	}
+	return entries
+}
+
 func AppendDuplicatesIfMissing(slice []Duplicate, key Duplicate) []Duplicate {
 	if !reflect.DeepEqual(Duplicate{}, key) && key.Hostname != "" {
 		for _, element := range slice {
@@ -72,4 +106,31 @@ func AppendIfHostMissing(slice []string, key string) []string {
 		return append(slice, key)
 	}
 	return slice
+}
+func ExtractTLDAndSubdomainFromString(str string) (string, string) {
+
+	var tld string
+	var subdomain string
+	parts := strings.Split(str, ".")
+
+	if len(parts) < 2 {
+		log.Error("Invalid domain " + str)
+		tld = str
+	} else {
+		if len(parts) >= 3 && (parts[len(parts)-2] == "or" || parts[len(parts)-2] == "co" || parts[len(parts)-2] == "ac" || parts[len(parts)-2] == "gv") {
+			tld = parts[len(parts)-3] + "." + parts[len(parts)-2] + "." + parts[len(parts)-1]
+			subdomain = strings.Join(parts[0:len(parts)-3], ".")
+		} else {
+			tld = parts[len(parts)-2] + "." + parts[len(parts)-1]
+			subdomain = strings.Join(parts[0:len(parts)-2], ".")
+		}
+	}
+	return tld, subdomain
+
+}
+
+func removeWhitespaces(entry string) string {
+	entry = strings.Replace(entry, "    ", " ", -1)
+	entry = strings.Replace(entry, "   ", " ", -1)
+	return strings.Replace(entry, "  ", " ", -1)
 }
