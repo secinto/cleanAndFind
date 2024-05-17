@@ -58,12 +58,19 @@ func AppendDNSRecordIfMissing(slice []DNSRecord, key DNSRecord) []DNSRecord {
 		for _, element := range slice {
 			if element.Host == key.Host {
 				log.Debugf("%s already exists in the slice.", key.Host)
+				combineDNSRecord(element, key)
 				return slice
 			}
 		}
 		return append(slice, key)
 	}
 	return slice
+}
+
+func combineDNSRecord(persistentEntry DNSRecord, record DNSRecord) {
+	persistentEntry.CNAME = AppendIfMissingAll(persistentEntry.CNAME, record.CNAME...)
+	persistentEntry.IPv4Addresses = AppendIfMissingAll(persistentEntry.IPv4Addresses, record.IPv4Addresses...)
+	persistentEntry.IPv6Addresses = AppendIfMissingAll(persistentEntry.IPv6Addresses, record.IPv6Addresses...)
 }
 
 func AppendHTTPXEntryIfMissing(entries []SimpleHTTPXEntry, key SimpleHTTPXEntry) []SimpleHTTPXEntry {

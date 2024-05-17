@@ -31,6 +31,7 @@ type MailRecord struct {
 	SPFEntry    string   `json:"SPFEntry,omitempty"`
 	DMARCEntry  []string `json:"DMARCEntry,omitempty"`
 	DKIMEntries []DKIM   `json:"DKIMEntries,omitempty"`
+	Infos       []string `json:"Infos,omitempty"`
 }
 
 type DKIM struct {

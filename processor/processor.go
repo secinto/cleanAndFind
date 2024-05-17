@@ -141,7 +141,7 @@ func (p *Processor) CleanDNSEntries() {
 		dnsEntry := CreateSimpleDNSEntryFromDPUX(dpuxEntry)
 		if !reflect.DeepEqual(dnsEntry, DNSRecord{}) {
 			if !strings.Contains(dnsEntry.Host, "_dmarc") && !strings.Contains(dnsEntry.Host, "_domainkey") {
-				dnsEntries = append(dnsEntries, dnsEntry)
+				dnsEntries = AppendDNSRecordIfMissing(dnsEntries, dnsEntry)
 			} else {
 				log.Debugf("Not adding host %s to DNS file", dnsEntry.Host)
 			}
@@ -304,6 +304,12 @@ func (p *Processor) FindMailRecords() []MailRecord {
 					for _, txtEntry := range txtEntries {
 						if strings.Contains(strings.ToLower(txtEntry), "spf") {
 							mailRecord.SPFEntry = removeWhitespaces(txtEntry)
+						}
+						if strings.Contains(strings.ToLower(txtEntry), "dkim") {
+							mailRecord.Infos = append(mailRecord.Infos, "DKIM entry illegally placed")
+						}
+						if strings.Contains(strings.ToLower(txtEntry), "dmarc") {
+							mailRecord.Infos = append(mailRecord.Infos, "DMARC entry illegally placed")
 						}
 					}
 				}
