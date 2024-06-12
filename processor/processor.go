@@ -7,13 +7,13 @@ import (
 	"gopkg.in/yaml.v3"
 	"os"
 	"reflect"
-	"secinto/checkfix_utils"
+	"secinto/checkfix_utils/utils"
 	"strconv"
 	"strings"
 )
 
 var (
-	log           = checkfix_utils.NewLogger()
+	log           = utils.NewLogger()
 	appConfig     Config
 	wantedHosts   = []string{"www", "mail", "portal", "webmail", "dashboard", "login", "remote", "ssh"}
 	unwantedHosts = []string{"autodiscover", "sip", "lyncdiscover", "enterpriseenrollment", "enterpriseregistration", "_domainkey", "_dmarc", "msoid"}
@@ -38,7 +38,6 @@ func (p *Processor) initialize(configLocation string) {
 	if !strings.HasSuffix(p.options.BaseFolder, "/") {
 		p.options.BaseFolder = p.options.BaseFolder + "/"
 	}
-	appConfig.HttpxDomainsFile = strings.Replace(appConfig.HttpxDomainsFile, "{project_name}", p.options.Project, -1)
 	appConfig.DpuxFile = strings.Replace(appConfig.DpuxFile, "{project_name}", p.options.Project, -1)
 }
 
@@ -110,12 +109,12 @@ func (p *Processor) CleanAndFind() error {
 func (p *Processor) CleanFile() {
 	log.Infof("Using %s as HTTPX input file", p.options.File)
 	httpxInput := GetDocumentFromFile(p.options.File)
-	hostEntries := checkfix_utils.GetValuesForKey(httpxInput, "host")
+	hostEntries := utils.GetValuesForKey(httpxInput, "host")
 	var ips []string
 	if len(hostEntries) >= 1 {
 		for _, hostEntry := range hostEntries {
 			if value, ok := hostEntry.Value().(string); ok {
-				ips = checkfix_utils.AppendIfMissing(ips, value)
+				ips = utils.AppendIfMissing(ips, value)
 			}
 		}
 
@@ -125,10 +124,10 @@ func (p *Processor) CleanFile() {
 		cleanedHosts, _ := p.deduplicateByContent(httpxInput, ipAddress)
 		for _, uniqueHost := range cleanedHosts {
 			log.Debugf("Adding hostname %s to non duplicates", uniqueHost.Input)
-			nonDuplicateHosts = checkfix_utils.AppendIfMissing(nonDuplicateHosts, uniqueHost.Input)
+			nonDuplicateHosts = utils.AppendIfMissing(nonDuplicateHosts, uniqueHost.Input)
 		}
 	}
-	checkfix_utils.WriteToTextFileInProject(p.options.UniqueHostsFile, strings.Join(nonDuplicateHosts[:], "\n"))
+	utils.WriteToFile(p.options.UniqueHostsFile, strings.Join(nonDuplicateHosts[:], "\n"))
 
 }
 
@@ -152,7 +151,7 @@ func (p *Processor) CleanDNSEntries() {
 
 	log.Infof("Found %d dns records", len(dnsEntries))
 	data, _ := json.MarshalIndent(dnsEntries, "", " ")
-	checkfix_utils.WriteToTextFileInProject(p.options.BaseFolder+"findings/dns_clean.json", string(data))
+	utils.WriteToFile(p.options.BaseFolder+"findings/dns_clean.json", string(data))
 
 }
 
@@ -164,7 +163,7 @@ func (p *Processor) CleanDomains(mailRecords []MailRecord, makeCLeanedDNS bool) 
 	httpxInput = GetDocumentFromFile(httpxInputFile)
 	ipsInputFile := p.options.BaseFolder + "recon/" + appConfig.DpuxIPFile
 	log.Infof("Using DPUx IP input %s", ipsInputFile)
-	ipsInput := checkfix_utils.ReadPlainTextFileByLines(ipsInputFile)
+	ipsInput := utils.ReadPlainTextFileByLines(ipsInputFile)
 
 	dpuxInputFile := p.options.BaseFolder + "recon/" + appConfig.DpuxFile
 	log.Infof("Using DPUx input %s", dpuxInputFile)
@@ -183,9 +182,9 @@ func (p *Processor) CleanDomains(mailRecords []MailRecord, makeCLeanedDNS bool) 
 		if len(cleanedHosts) > 0 {
 			for _, uniqueHost := range cleanedHosts {
 				log.Debugf("Adding hostname %s to non duplicates", uniqueHost.Input)
-				nonDuplicateHosts = checkfix_utils.AppendIfMissing(nonDuplicateHosts, uniqueHost.Input)
+				nonDuplicateHosts = utils.AppendIfMissing(nonDuplicateHosts, uniqueHost.Input)
 
-				host, _ := checkfix_utils.GetHostAndPort(uniqueHost.Input)
+				host, _ := utils.GetHostAndPort(uniqueHost.Input)
 				dnsEntry := GetDNSRecordForHostname(dpuxInput, host)
 				if dnsEntry.Host != "" {
 					dnsRecords = AppendDNSRecordIfMissing(dnsRecords, dnsEntry)
@@ -197,7 +196,7 @@ func (p *Processor) CleanDomains(mailRecords []MailRecord, makeCLeanedDNS bool) 
 			dnsEntry := GetDNSRecordForIPAddress(dpuxInput, ipAddress)
 			if dnsEntry.Host != "" {
 				log.Debugf("Adding hostname %s to non duplicates for IP %s", dnsEntry.Host, ipAddress)
-				nonDuplicateHosts = checkfix_utils.AppendIfMissing(nonDuplicateHosts, dnsEntry.Host)
+				nonDuplicateHosts = utils.AppendIfMissing(nonDuplicateHosts, dnsEntry.Host)
 				dnsRecords = AppendDNSRecordIfMissing(dnsRecords, dnsEntry)
 			} else {
 				log.Debugf("Found DNS record with empty ipAddress during processing IP %s", ipAddress)
@@ -212,12 +211,12 @@ func (p *Processor) CleanDomains(mailRecords []MailRecord, makeCLeanedDNS bool) 
 		dnsEntry := GetDNSRecordForHostname(dpuxInput, mailHost.Host)
 		if !reflect.DeepEqual(DNSRecord{}, dnsEntry) {
 			dnsRecords = AppendDNSRecordIfMissing(dnsRecords, dnsEntry)
-			nonDuplicateHosts = checkfix_utils.AppendIfMissing(nonDuplicateHosts, dnsEntry.Host)
+			nonDuplicateHosts = utils.AppendIfMissing(nonDuplicateHosts, dnsEntry.Host)
 			for _, duplicate := range duplicateHosts {
 				if duplicate.Hostname == dnsEntry.Host {
 					continue
 				}
-				duplicate.DuplicateHosts = checkfix_utils.RemoveFromStringArray(duplicate.DuplicateHosts, dnsEntry.Host)
+				duplicate.DuplicateHosts = utils.RemoveFromStringArray(duplicate.DuplicateHosts, dnsEntry.Host)
 			}
 		}
 	}
@@ -228,10 +227,10 @@ func (p *Processor) CleanDomains(mailRecords []MailRecord, makeCLeanedDNS bool) 
 	duplicateToNonDuplicateMap := createMapNonDuplicateForDuplicate(duplicateHosts)
 
 	for _, hostEntry := range nonDuplicateHosts {
-		host, port := checkfix_utils.GetHostAndPort(hostEntry)
+		host, port := utils.GetHostAndPort(hostEntry)
 
 		if !checkIfHostStringIsContained(host, unwantedHosts, "") {
-			cleanedDomains = checkfix_utils.AppendIfMissing(cleanedDomains, host)
+			cleanedDomains = utils.AppendIfMissing(cleanedDomains, host)
 			if port != "" {
 				cleanedDomainsWithPorts = AppendIfHostMissing(cleanedDomainsWithPorts, host+":"+port)
 				if port == "80" {
@@ -248,22 +247,22 @@ func (p *Processor) CleanDomains(mailRecords []MailRecord, makeCLeanedDNS bool) 
 		}
 	}
 	log.Infof("Found %d non duplicate hosts without port", len(cleanedDomains))
-	cleanedDomainsString := checkfix_utils.ConvertStringArrayToString(cleanedDomains, "\n")
+	cleanedDomainsString := utils.ConvertStringArrayToString(cleanedDomains, "\n")
 
-	checkfix_utils.WriteToTextFileInProject(p.options.BaseFolder+"domains_clean.txt", cleanedDomainsString)
+	utils.WriteToFile(p.options.BaseFolder+"domains_clean.txt", cleanedDomainsString)
 
 	log.Infof("Found %d non duplicate hosts with port", len(cleanedDomainsWithPorts))
-	cleanedDomainsWithPortsString := checkfix_utils.ConvertStringArrayToString(cleanedDomainsWithPorts, "\n")
-	checkfix_utils.WriteToTextFileInProject(p.options.BaseFolder+"domains_clean_with_http_ports.txt", cleanedDomainsWithPortsString)
+	cleanedDomainsWithPortsString := utils.ConvertStringArrayToString(cleanedDomainsWithPorts, "\n")
+	utils.WriteToTextFileInProject(p.options.BaseFolder+"domains_clean_with_http_ports.txt", cleanedDomainsWithPortsString)
 
 	log.Infof("Found %d duplicate host entries", len(duplicateHosts))
 	data, _ := json.MarshalIndent(duplicateHosts, "", " ")
-	checkfix_utils.WriteToTextFileInProject(p.options.BaseFolder+"findings/duplicates.json", string(data))
+	utils.WriteToTextFileInProject(p.options.BaseFolder+"findings/duplicates.json", string(data))
 
 	if makeCLeanedDNS {
 		log.Infof("Found %d dns records", len(dnsRecords))
 		data, _ = json.MarshalIndent(dnsRecords, "", " ")
-		checkfix_utils.WriteToTextFileInProject(p.options.BaseFolder+"findings/dns_clean.json", string(data))
+		utils.WriteToTextFileInProject(p.options.BaseFolder+"findings/dns_clean.json", string(data))
 	}
 	log.Info("Created cleaned domains file for project")
 }
@@ -276,19 +275,19 @@ func (p *Processor) FindMailRecords() []MailRecord {
 	input := GetDocumentFromFile(dpuxFile)
 
 	// Get MX records for the main site (the one named as the project
-	allMXRecords := checkfix_utils.GetAllRecordsForKey(input, "mx")
+	allMXRecords := utils.GetAllJSONNodesForKey(input, "mx")
 	// Check all other entries from DNSX
 	if len(allMXRecords) >= 1 {
 		// Fine, we found at least one. Now check if the other information (SPF, DMARC, DKIM) is available.
 		for _, mxRecordNode := range allMXRecords {
-			hostEntries := checkfix_utils.GetValuesFromNode(mxRecordNode, "host")
+			hostEntries := utils.GetValuesFromNode(mxRecordNode, "host")
 
 			if len(hostEntries) >= 1 {
 
 				log.Infof("Processing host entry %s", hostEntries[0])
 				log.Infof("Ignoring host entries %s", hostEntries[1:])
 
-				mxRecordEntries := checkfix_utils.GetValuesFromNode(mxRecordNode, "mx")
+				mxRecordEntries := utils.GetValuesFromNode(mxRecordNode, "mx")
 				var mailRecord MailRecord
 				if _, ok := mailRecords[hostEntries[0]]; !ok {
 					mailRecord = MailRecord{
@@ -299,7 +298,7 @@ func (p *Processor) FindMailRecords() []MailRecord {
 					mailRecord = mailRecords[hostEntries[0]]
 				}
 				// Check if the host has an SPF entry.
-				txtEntries := checkfix_utils.GetValuesFromNode(mxRecordNode, "txt")
+				txtEntries := utils.GetValuesFromNode(mxRecordNode, "txt")
 				if len(txtEntries) > 0 {
 					for _, txtEntry := range txtEntries {
 						if strings.Contains(strings.ToLower(txtEntry), "spf") {
@@ -317,8 +316,8 @@ func (p *Processor) FindMailRecords() []MailRecord {
 				if mailRecord.SPFEntry == "" {
 					if tld != hostEntries[0] {
 						for _, tldMxRecordNode := range allMXRecords {
-							if hostNames := checkfix_utils.GetValuesFromNode(tldMxRecordNode, "host"); hostNames[0] == tld {
-								txtEntries = checkfix_utils.GetValuesFromNode(tldMxRecordNode, "txt")
+							if hostNames := utils.GetValuesFromNode(tldMxRecordNode, "host"); hostNames[0] == tld {
+								txtEntries = utils.GetValuesFromNode(tldMxRecordNode, "txt")
 								if len(txtEntries) > 0 {
 									for _, txtEntry := range txtEntries {
 										if strings.Contains(strings.ToLower(txtEntry), "spf") {
@@ -333,14 +332,14 @@ func (p *Processor) FindMailRecords() []MailRecord {
 				}
 
 				// Check if an DMARC entry exists for the current host
-				dmarcEntries := checkfix_utils.GetNodesFromSpecificQueryViaEquals(input, "host", "_dmarc."+tld)
+				dmarcEntries := utils.GetNodesFromSpecificQueryViaEquals(input, "host", "_dmarc."+tld)
 				for _, entry := range dmarcEntries {
-					txtDMARCEntry := checkfix_utils.GetValuesFromNode(entry, "txt")
+					txtDMARCEntry := utils.GetValuesFromNode(entry, "txt")
 					for _, txtEntry := range txtDMARCEntry {
 						if txtEntry != "" {
 							if strings.Contains(txtEntry, "DMARC") {
 								log.Infof("Adding TLD dmarc entry for host %s", hostEntries[0])
-								mailRecord.DMARCEntry = AppendIfMissing(mailRecord.DMARCEntry, removeWhitespaces(txtEntry))
+								mailRecord.DMARCEntry = utils.AppendIfMissing(mailRecord.DMARCEntry, removeWhitespaces(txtEntry))
 							} else {
 								log.Infof("TXT record for _dmarc.%s contains invalid conten: %s", "_dmarc."+tld, txtEntry)
 							}
@@ -348,14 +347,14 @@ func (p *Processor) FindMailRecords() []MailRecord {
 					}
 				}
 
-				dmarcEntries = checkfix_utils.GetNodesFromSpecificQueryViaEquals(input, "host", "_dmarc."+hostEntries[0])
+				dmarcEntries = utils.GetNodesFromSpecificQueryViaEquals(input, "host", "_dmarc."+hostEntries[0])
 				for _, entry := range dmarcEntries {
-					txtDMARCEntry := checkfix_utils.GetValuesFromNode(entry, "txt")
+					txtDMARCEntry := utils.GetValuesFromNode(entry, "txt")
 					for _, txtEntry := range txtDMARCEntry {
 						if txtEntry != "" {
 							if strings.Contains(txtEntry, "DMARC") {
 								log.Infof("Adding TLD dmarc entry for host %s", hostEntries[0])
-								mailRecord.DMARCEntry = AppendIfMissing(mailRecord.DMARCEntry, removeWhitespaces(txtEntry))
+								mailRecord.DMARCEntry = utils.AppendIfMissing(mailRecord.DMARCEntry, removeWhitespaces(txtEntry))
 							} else {
 								log.Infof("TXT record for _dmarc.%s contains invalid conten: %s", "_dmarc."+tld, txtEntry)
 							}
@@ -363,19 +362,19 @@ func (p *Processor) FindMailRecords() []MailRecord {
 					}
 				}
 
-				dkimEntries := checkfix_utils.GetAllEntriesByContains(input, "host", []string{"_domainkey." + hostEntries[0]})
+				dkimEntries := utils.GetAllEntriesByContains(input, "host", []string{"_domainkey." + hostEntries[0]})
 				if len(dkimEntries) > 0 {
 					var entries []DKIM
 					for _, dkimEntry := range dkimEntries {
 						if hostName, ok := dkimEntry.Value().(string); ok {
 							entry := DKIM{Selector: hostName}
 
-							txtValue := checkfix_utils.GetValuesFromNode(dkimEntry.Parent, "txt")
+							txtValue := utils.GetValuesFromNode(dkimEntry.Parent, "txt")
 
 							if len(txtValue) > 0 {
 								entry.TXT = removeWhitespaces(strings.Join(txtValue, ""))
 							}
-							cnameValue := checkfix_utils.GetValuesFromNode(dkimEntry.Parent, "cname")
+							cnameValue := utils.GetValuesFromNode(dkimEntry.Parent, "cname")
 							if len(cnameValue) > 0 {
 								entry.CNAME = removeWhitespaces(strings.Join(cnameValue, ""))
 							}
@@ -399,11 +398,11 @@ func (p *Processor) FindMailRecords() []MailRecord {
 		}
 	}
 
-	allHostRecords := checkfix_utils.GetAllRecordsForKey(input, "host")
+	allHostRecords := utils.GetAllJSONNodesForKey(input, "host")
 	if len(allMXRecords) >= 1 {
 		// Fine, we found at least one. Now check if the other information (SPF, DMARC, DKIM) is available.
 		for _, hostRecordNode := range allHostRecords {
-			hostEntries := checkfix_utils.GetValuesFromNode(hostRecordNode, "host")
+			hostEntries := utils.GetValuesFromNode(hostRecordNode, "host")
 
 			if len(hostEntries) >= 1 {
 				tld, _ := ExtractTLDAndSubdomainFromString(hostEntries[0])
@@ -417,14 +416,14 @@ func (p *Processor) FindMailRecords() []MailRecord {
 						mailRecord = mailRecords[hostEntries[0]]
 					}
 					// Check if an DMARC entry exists for the current host
-					dmarcEntries := checkfix_utils.GetNodesFromSpecificQueryViaEquals(input, "host", "_dmarc."+tld)
+					dmarcEntries := utils.GetNodesFromSpecificQueryViaEquals(input, "host", "_dmarc."+tld)
 					for _, entry := range dmarcEntries {
-						txtDMARCEntry := checkfix_utils.GetValuesFromNode(entry, "txt")
+						txtDMARCEntry := utils.GetValuesFromNode(entry, "txt")
 						for _, txtEntry := range txtDMARCEntry {
 							if txtEntry != "" {
 								if strings.Contains(txtEntry, "DMARC") {
 									log.Infof("Adding TLD dmarc entry for host %s", hostEntries[0])
-									mailRecord.DMARCEntry = AppendIfMissing(mailRecord.DMARCEntry, removeWhitespaces(txtEntry))
+									mailRecord.DMARCEntry = utils.AppendIfMissing(mailRecord.DMARCEntry, removeWhitespaces(txtEntry))
 								} else {
 									log.Infof("TXT record for _dmarc.%s contains invalid conten: %s", "_dmarc."+tld, txtEntry)
 								}
@@ -432,14 +431,14 @@ func (p *Processor) FindMailRecords() []MailRecord {
 						}
 					}
 
-					dmarcEntries = checkfix_utils.GetNodesFromSpecificQueryViaEquals(input, "host", "_dmarc."+hostEntries[0])
+					dmarcEntries = utils.GetNodesFromSpecificQueryViaEquals(input, "host", "_dmarc."+hostEntries[0])
 					for _, entry := range dmarcEntries {
-						txtDMARCEntry := checkfix_utils.GetValuesFromNode(entry, "txt")
+						txtDMARCEntry := utils.GetValuesFromNode(entry, "txt")
 						for _, txtEntry := range txtDMARCEntry {
 							if txtEntry != "" {
 								if strings.Contains(txtEntry, "DMARC") {
 									log.Infof("Adding TLD dmarc entry for host %s", hostEntries[0])
-									mailRecord.DMARCEntry = AppendIfMissing(mailRecord.DMARCEntry, removeWhitespaces(txtEntry))
+									mailRecord.DMARCEntry = utils.AppendIfMissing(mailRecord.DMARCEntry, removeWhitespaces(txtEntry))
 								} else {
 									log.Infof("TXT record for _dmarc.%s contains invalid conten: %s", "_dmarc."+tld, txtEntry)
 								}
@@ -457,8 +456,8 @@ func (p *Processor) FindMailRecords() []MailRecord {
 	}
 
 	data, _ := json.MarshalIndent(mxRecords, "", " ")
-	checkfix_utils.CreateDirectoryIfNotExists(p.options.BaseFolder + "findings/")
-	checkfix_utils.WriteToTextFileInProject(p.options.BaseFolder+"findings/mailsecurity.json", string(data))
+	utils.CreateDirectoryIfNotExists(p.options.BaseFolder + "findings/")
+	utils.WriteToFile(p.options.BaseFolder+"findings/mailsecurity.json", string(data))
 
 	return mxRecords
 }
@@ -569,8 +568,8 @@ func getBestDuplicateMatch(entries []SimpleHTTPXEntry, project string, tlds map[
 	var host string
 	var port string
 	for _, entry := range entries {
-		host, port = checkfix_utils.GetHostAndPort(entry.Input)
-		tld := checkfix_utils.ExtractTLDFromString(host)
+		host, port = utils.GetHostAndPort(entry.Input)
+		tld := utils.ExtractTLDFromString(host)
 		// If entry is a top level domain we either use it as current best match, if it is the same as the project.
 		// If not we use it as possible best match if it is an entry with port 443. If not we use it as general
 		if host == tld {
@@ -590,7 +589,7 @@ func getBestDuplicateMatch(entries []SimpleHTTPXEntry, project string, tlds map[
 				if (possibleBestMatch == SimpleHTTPXEntry{}) {
 					possibleBestMatch = entry
 				} else {
-					_, currentPort := checkfix_utils.GetHostAndPort(possibleBestMatch.Input)
+					_, currentPort := utils.GetHostAndPort(possibleBestMatch.Input)
 					if port == "443" {
 						possibleBestMatch = getInnerBestMatch(project, possibleBestMatch, entry)
 					} else if currentPort != "443" {
@@ -605,7 +604,7 @@ func getBestDuplicateMatch(entries []SimpleHTTPXEntry, project string, tlds map[
 			} else {
 				//Check if it should be used either if the port is 443 or the port of the currently and
 				//the port to check are not 443. Otherwise stay with as it is.
-				_, currentPort := checkfix_utils.GetHostAndPort(match.Input)
+				_, currentPort := utils.GetHostAndPort(match.Input)
 				if port == "443" {
 					match = getInnerBestMatch(project, match, entry)
 				} else if currentPort != "443" {
@@ -621,7 +620,7 @@ func getBestDuplicateMatch(entries []SimpleHTTPXEntry, project string, tlds map[
 		match = possibleBestMatch
 	}
 	// Remove the match from TLDs if it exists
-	host, port = checkfix_utils.GetHostAndPort(match.Input)
+	host, port = utils.GetHostAndPort(match.Input)
 	delete(tlds, host)
 
 	log.Debugf("Found best match for duplicates with hash %s or words %d and lines %d is host %s", match.BodyHash, match.Words, match.Lines, match.Input)
@@ -630,26 +629,26 @@ func getBestDuplicateMatch(entries []SimpleHTTPXEntry, project string, tlds map[
 
 func getInnerBestMatch(project string, currentMatch SimpleHTTPXEntry, entryToCheck SimpleHTTPXEntry) SimpleHTTPXEntry {
 	var match SimpleHTTPXEntry
-	currentHost, _ := checkfix_utils.GetHostAndPort(currentMatch.Input)
-	host, _ := checkfix_utils.GetHostAndPort(entryToCheck.Input)
-	tldCurrent := checkfix_utils.ExtractTLDFromString(currentHost)
-	tldEntry := checkfix_utils.ExtractTLDFromString(host)
+	currentHost, _ := utils.GetHostAndPort(currentMatch.Input)
+	host, _ := utils.GetHostAndPort(entryToCheck.Input)
+	tldCurrent := utils.ExtractTLDFromString(currentHost)
+	tldEntry := utils.ExtractTLDFromString(host)
 	if tldEntry == project || tldCurrent != project {
-		if checkfix_utils.GetSubDomainCount(currentHost) >= checkfix_utils.GetSubDomainCount(host) {
+		if utils.GetSubDomainCount(currentHost) >= utils.GetSubDomainCount(host) {
 			if checkIfHostStringIsContained(host, wantedHosts, tldEntry) {
 				match = entryToCheck
 			} else if !checkIfHostStringIsContained(currentHost, wantedHosts, tldCurrent) {
-				if checkfix_utils.GetHostnameLength(currentHost) >= checkfix_utils.GetHostnameLength(host) {
+				if utils.GetHostnameLength(currentHost) >= utils.GetHostnameLength(host) {
 					match = entryToCheck
 				}
 			}
 		}
 	} else {
-		if checkfix_utils.GetSubDomainCount(currentHost) > checkfix_utils.GetSubDomainCount(host) {
+		if utils.GetSubDomainCount(currentHost) > utils.GetSubDomainCount(host) {
 			if checkIfHostStringIsContained(host, wantedHosts, tldEntry) {
 				match = entryToCheck
 			} else if !checkIfHostStringIsContained(currentHost, wantedHosts, tldCurrent) {
-				if checkfix_utils.GetHostnameLength(currentHost) > checkfix_utils.GetHostnameLength(host) {
+				if utils.GetHostnameLength(currentHost) > utils.GetHostnameLength(host) {
 					match = entryToCheck
 				}
 			}
@@ -695,7 +694,7 @@ func processDuplicate(duplicates map[string]Duplicate, currentEntry SimpleHTTPXE
 	// All other are duplicates
 	duplicate := duplicates[currentKey]
 
-	if host, _ := checkfix_utils.GetHostAndPort(duplicate.Hostname); host == "matomo.saubermacher.at" {
+	if host, _ := utils.GetHostAndPort(duplicate.Hostname); host == "matomo.saubermacher.at" {
 		log.Debugf("Using %s as duplicate base. Check if correct", duplicate.Hostname)
 	}
 
@@ -703,11 +702,11 @@ func processDuplicate(duplicates map[string]Duplicate, currentEntry SimpleHTTPXE
 	if reflect.DeepEqual(Duplicate{}, duplicate) {
 		duplicate = getDuplicate(currentEntry)
 	} else if duplicate.Hostname != currentEntry.Input {
-		duplicate.DuplicateHosts = checkfix_utils.AppendIfMissing(duplicate.DuplicateHosts, currentEntry.Input)
+		duplicate.DuplicateHosts = utils.AppendIfMissing(duplicate.DuplicateHosts, currentEntry.Input)
 	}
 	//If a duplicate for the body hash already exists, inline it to the new duplicates entry
 	if !reflect.DeepEqual(Duplicate{}, duplicates[currentEntry.BodyHash]) {
-		duplicate.DuplicateHosts = checkfix_utils.AppendSliceIfMissingExcept(duplicate.DuplicateHosts, duplicates[currentEntry.BodyHash].DuplicateHosts, duplicate.Hostname)
+		duplicate.DuplicateHosts = utils.AppendSliceIfMissingExcept(duplicate.DuplicateHosts, duplicates[currentEntry.BodyHash].DuplicateHosts, duplicate.Hostname)
 		delete(duplicates, currentEntry.BodyHash)
 	}
 	duplicates[currentKey] = duplicate

@@ -3,7 +3,7 @@ package processor
 import (
 	"github.com/antchfx/jsonquery"
 	"os"
-	"secinto/checkfix_utils"
+	"secinto/checkfix_utils/utils"
 	"strings"
 )
 
@@ -12,7 +12,7 @@ func GetDocumentFromFile(filename string) *jsonquery.Node {
 	if err != nil {
 		log.Fatalf("Reading JSON input file failed: %s %s", err.Error(), filename)
 	}
-	jsonlString := checkfix_utils.ConvertJSONLtoJSON(string(data))
+	jsonlString := utils.ConvertJSONLtoJSON(string(data))
 	jsonReader := strings.NewReader(jsonlString)
 	input, err := jsonquery.Parse(jsonReader)
 	if err != nil {

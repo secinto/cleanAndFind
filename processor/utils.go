@@ -2,43 +2,9 @@ package processor
 
 import (
 	"reflect"
-	"secinto/checkfix_utils"
+	"secinto/checkfix_utils/utils"
 	"strings"
 )
-
-func AppendIfMissing(entries []string, key string) []string {
-	if key != "" {
-		for _, entry := range entries {
-			if key == entry {
-				return entries
-			}
-		}
-		return append(entries, key)
-	}
-	return entries
-}
-
-func AppendIfMissingAll(entries []string, keys ...string) []string {
-	var exists bool
-	if len(keys) > 0 {
-		if len(entries) > 0 {
-			for _, key := range keys {
-				exists = false
-				for _, entry := range entries {
-					if key == entry {
-						exists = true
-					}
-				}
-				if !exists {
-					entries = append(entries, key)
-				}
-			}
-		} else {
-			return keys
-		}
-	}
-	return entries
-}
 
 func AppendDuplicatesIfMissing(slice []Duplicate, key Duplicate) []Duplicate {
 	if !reflect.DeepEqual(Duplicate{}, key) && key.Hostname != "" {
@@ -68,9 +34,9 @@ func AppendDNSRecordIfMissing(slice []DNSRecord, key DNSRecord) []DNSRecord {
 }
 
 func combineDNSRecord(persistentEntry DNSRecord, record DNSRecord) {
-	persistentEntry.CNAME = AppendIfMissingAll(persistentEntry.CNAME, record.CNAME...)
-	persistentEntry.IPv4Addresses = AppendIfMissingAll(persistentEntry.IPv4Addresses, record.IPv4Addresses...)
-	persistentEntry.IPv6Addresses = AppendIfMissingAll(persistentEntry.IPv6Addresses, record.IPv6Addresses...)
+	persistentEntry.CNAME = utils.AppendIfMissingAll(persistentEntry.CNAME, record.CNAME...)
+	persistentEntry.IPv4Addresses = utils.AppendIfMissingAll(persistentEntry.IPv4Addresses, record.IPv4Addresses...)
+	persistentEntry.IPv6Addresses = utils.AppendIfMissingAll(persistentEntry.IPv6Addresses, record.IPv6Addresses...)
 }
 
 func AppendHTTPXEntryIfMissing(entries []SimpleHTTPXEntry, key SimpleHTTPXEntry) []SimpleHTTPXEntry {
@@ -105,7 +71,7 @@ func AppendIfHostMissing(slice []string, key string) []string {
 				} else if strings.Contains(element, ":") && port == "" {
 					return slice
 				} else if !strings.Contains(element, ":") && port != "" {
-					newSlice := checkfix_utils.RemoveFromStringArray(slice, element)
+					newSlice := utils.RemoveFromStringArray(slice, element)
 					return append(newSlice, host+":"+port)
 				}
 			}
