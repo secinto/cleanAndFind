@@ -298,11 +298,17 @@ func (p *Processor) FindMailRecords() []MailRecord {
 					mailRecord = mailRecords[hostEntries[0]]
 				}
 				// Check if the host has an SPF entry.
+				isSPFRow := false
+				lastSPFRow := false
 				txtEntries := utils.GetValuesFromNode(mxRecordNode, "txt")
 				if len(txtEntries) > 0 {
 					for _, txtEntry := range txtEntries {
-						if strings.Contains(strings.ToLower(txtEntry), "spf") {
-							mailRecord.SPFEntry = removeWhitespaces(txtEntry)
+						if strings.Contains(strings.ToLower(txtEntry), "spf") && !lastSPFRow {
+							mailRecord.SPFEntry = mailRecord.SPFEntry + removeWhitespaces(txtEntry)
+							isSPFRow = true
+						}
+						if isSPFRow && strings.HasSuffix(strings.ToLower(txtEntry), "all") {
+							lastSPFRow = true
 						}
 						if strings.Contains(strings.ToLower(txtEntry), "dkim") {
 							mailRecord.Infos = append(mailRecord.Infos, "DKIM entry illegally placed")
