@@ -16,7 +16,7 @@ var (
 	log           = utils.NewLogger()
 	appConfig     Config
 	wantedHosts   = []string{"www", "mail", "portal", "webmail", "dashboard", "login", "remote", "ssh"}
-	unwantedHosts = []string{"autodiscover", "sip", "lyncdiscover", "enterpriseenrollment", "enterpriseregistration", "_domainkey", "_dmarc", "msoid"}
+	unwantedHosts = []string{"autodiscover", "sip", "lyncdiscover", "owa", "www.autodiscover", "enterpriseenrollment", "enterpriseregistration", "_domainkey", "_dmarc", "msoid"}
 )
 
 //-------------------------------------------
