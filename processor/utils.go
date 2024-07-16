@@ -2,7 +2,7 @@ package processor
 
 import (
 	"reflect"
-	"secinto/checkfix_utils/utils"
+	utils "secinto/checkfix_utils"
 	"strings"
 )
 

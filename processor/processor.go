@@ -7,7 +7,7 @@ import (
 	"gopkg.in/yaml.v3"
 	"os"
 	"reflect"
-	"secinto/checkfix_utils/utils"
+	utils "secinto/checkfix_utils"
 	"strconv"
 	"strings"
 )
