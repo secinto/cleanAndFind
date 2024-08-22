@@ -337,10 +337,10 @@ func (p *Processor) FindMailRecords() []MailRecord {
 				}
 			}*/
 			log.Debugf("Checking host dmarc entry for host %s", hostEntries[0])
-			p.getDMARCEntryForHost(hostEntries[0], mailRecord, input)
+			p.getDMARCEntryForHost(hostEntries[0], &mailRecord, input)
 			if len(mailRecord.DMARCEntry) == 0 && (len(mailRecord.MXRecords) != 0 || len(mailRecord.DKIMEntries) != 0 || len(mailRecord.SPFEntry) != 0) {
 				log.Debugf("Checking TLD dmarc entry for host %s", hostEntries[0])
-				p.getDMARCEntryForHost(tld, mailRecord, input)
+				p.getDMARCEntryForHost(tld, &mailRecord, input)
 			}
 			// Check if an DMARC entry exists for the current host
 			/*dmarcEntries := utils.GetNodesFromSpecificQueryViaEquals(input, "host", "_dmarc."+tld)
@@ -392,7 +392,10 @@ func (p *Processor) FindMailRecords() []MailRecord {
 						if len(cnameValue) > 0 {
 							entry.CNAME = removeWhitespaces(strings.Join(cnameValue, ""))
 						}
-						entries = append(entries, entry)
+						if len(entry.CNAME) > 0 || len(entry.TXT) > 0 {
+							log.Infof("Adding DKIM entry for host %s", hostName)
+							entries = append(entries, entry)
+						}
 					} else {
 						log.Errorf("Found DKIM entry which couldn't be resolved to a host name. %s", dkimEntry)
 					}
@@ -404,6 +407,8 @@ func (p *Processor) FindMailRecords() []MailRecord {
 			if !strings.HasPrefix(hostEntries[0], "_dmarc.") && !strings.Contains(hostEntries[0], "_domainkey.") && (len(mailRecord.MXRecords) != 0 || len(mailRecord.SPFEntry) != 0 || len(mailRecord.DKIMEntries) != 0) {
 				mailRecords[mailRecord.Host] = mailRecord
 				log.Infof("Added DNS record for host %s", mailRecord.Host)
+			} else if tld == hostEntries[0] {
+				mailRecords[mailRecord.Host] = mailRecord
 			} else {
 				log.Debugf("No mail relevant DNS record for host %s", hostEntries[0])
 			}
@@ -479,14 +484,14 @@ func (p *Processor) FindMailRecords() []MailRecord {
 //			Helper methods
 //-------------------------------------------
 
-func (p *Processor) getDMARCEntryForHost(host string, record MailRecord, input *jsonquery.Node) {
+func (p *Processor) getDMARCEntryForHost(host string, record *MailRecord, input *jsonquery.Node) {
 	dmarcEntries := utils.GetNodesFromSpecificQueryViaEquals(input, "host", "_dmarc."+host)
 	for _, entry := range dmarcEntries {
 		txtDMARCEntry := utils.GetValuesFromNode(entry, "txt")
 		for _, txtEntry := range txtDMARCEntry {
 			if txtEntry != "" {
 				if strings.Contains(txtEntry, "DMARC") {
-					log.Infof("Adding TLD dmarc entry for host %s", host)
+					log.Infof("Adding dmarc entry for host %s", host)
 					record.DMARCEntry = utils.AppendIfMissing(record.DMARCEntry, removeWhitespaces(txtEntry))
 				} else {
 					record.Infos = append(record.Infos, "DKIM entry illegally placed")
