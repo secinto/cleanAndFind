@@ -7,11 +7,11 @@ replace secinto/checkfix_utils => ../checkfix_utils
 require (
 	github.com/antchfx/jsonquery v1.3.5
 	github.com/pkg/errors v0.9.1
-	github.com/projectdiscovery/goflags v0.1.63
-	github.com/projectdiscovery/gologger v1.1.19
-	github.com/projectdiscovery/utils v0.2.5
+	github.com/projectdiscovery/goflags v0.1.64
+	github.com/projectdiscovery/gologger v1.1.21
+	github.com/projectdiscovery/utils v0.2.7
 	github.com/sirupsen/logrus v1.9.3
-	golang.org/x/exp v0.0.0-20240808152545-0cdaa3abc0fa
+	golang.org/x/exp v0.0.0-20240823005443-9b4947da3948
 	gopkg.in/yaml.v3 v3.0.1
 	secinto/checkfix_utils v0.1.2
 )

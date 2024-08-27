@@ -40,6 +40,31 @@ type DKIM struct {
 	CNAME    string
 }
 
+type DPUXEntry struct {
+	Host       string   `json:"host"`
+	TXT        []string `json:"txt"`
+	CNAME      []string `json:"cname"`
+	MX         []string `json:"mx"`
+	A          []string `json:"a"`
+	AAAA       []string `json:"aaaa"`
+	Resolver   []string `json:"resolver"`
+	SOA        []SOA    `json:"soa"`
+	TTL        int      `json:"ttl"`
+	StatusCode string   `json:"status_code"`
+	Timestamp  string   `json:"timestamp"`
+}
+
+type SOA struct {
+	Name    string `json:"name"`
+	Ns      string `json:"ns"`
+	Mailbox string `json:"mailbox"`
+	Serial  int    `json:"serial"`
+	Refresh int    `json:"refresh"`
+	Retry   int    `json:"retry"`
+	Expire  int    `json:"expire"`
+	Minttl  int    `json:"minttl"`
+}
+
 type DNSRecord struct {
 	Host          string   `json:"Host"`
 	CNAME         []string `json:"CNAMES,omitempty"`

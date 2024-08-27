@@ -268,206 +268,82 @@ func (p *Processor) CleanDomains(mailRecords []MailRecord, makeCLeanedDNS bool) 
 }
 
 func (p *Processor) FindMailRecords() []MailRecord {
+	var mailRecord MailRecord
+
 	mailRecords := make(map[string]MailRecord)
 
 	dpuxFile := p.options.BaseFolder + "recon/" + appConfig.DpuxFile
 	log.Infof("Using DPUX DNS input %s", dpuxFile)
 	input := GetDocumentFromFile(dpuxFile)
 
-	// Get MX records for the main site (the one named as the project
+	// Check all host entries from DPUx, reflects all existing and resolved host names (at least for MX, TXT, A, AAAA, and CNAME).
 	allHostRecords := utils.GetAllJSONNodesForKey(input, "host")
-	// Check all other entries from DNSX
-	//if len(allHostRecords) >= 1 {
-	// Fine, we found at least one. Now check if the other information (SPF, DMARC, DKIM) is available.
 	for _, hostRecordNode := range allHostRecords {
-		hostEntries := utils.GetValuesFromNode(hostRecordNode, "host")
+		entry := GetDPUXEntry(hostRecordNode)
 
-		if len(hostEntries) >= 1 {
+		if strings.HasPrefix(entry.Host, "_dmarc.") || strings.Contains(entry.Host, "._domainkey.") {
+			continue
+		}
 
-			log.Infof("Processing host entry %s", hostEntries[0])
-			log.Debugf("Ignoring host entries %s", hostEntries[1:])
-
-			mxRecordEntries := utils.GetValuesFromNode(hostRecordNode, "mx")
-			var mailRecord MailRecord
-			if _, ok := mailRecords[hostEntries[0]]; !ok {
-				mailRecord = MailRecord{
-					Host:      hostEntries[0],
-					MXRecords: mxRecordEntries,
-				}
-			} else {
-				mailRecord = mailRecords[hostEntries[0]]
+		log.Infof("Processing host entry %s", entry.Host)
+		if _, ok := mailRecords[entry.Host]; !ok {
+			mailRecord = MailRecord{
+				Host: entry.Host,
 			}
-			// Check if the host has an SPF entry.
-			isSPFRow := false
-			lastSPFRow := false
-			txtEntries := utils.GetValuesFromNode(hostRecordNode, "txt")
-			if len(txtEntries) > 0 {
-				for _, txtEntry := range txtEntries {
-					if strings.Contains(strings.ToLower(txtEntry), "spf") && !lastSPFRow {
-						mailRecord.SPFEntry = mailRecord.SPFEntry + removeWhitespaces(txtEntry)
-						isSPFRow = true
-					}
-					if isSPFRow && strings.HasSuffix(strings.ToLower(txtEntry), "all") {
-						lastSPFRow = true
-					}
-					if strings.Contains(strings.ToLower(txtEntry), "dkim") {
-						mailRecord.Infos = append(mailRecord.Infos, "DKIM entry illegally placed")
-					}
-					if strings.Contains(strings.ToLower(txtEntry), "dmarc") {
-						mailRecord.Infos = append(mailRecord.Infos, "DMARC entry illegally placed")
-					}
+		} else {
+			mailRecord = mailRecords[entry.Host]
+		}
+
+		if len(entry.MX) > 0 {
+			mailRecord.MXRecords = entry.MX
+		}
+		// Check if the host has an SPF entry.
+		isSPFRow := false
+		lastSPFRow := false
+
+		if len(entry.TXT) > 0 {
+			for _, txtEntry := range entry.TXT {
+				if strings.Contains(strings.ToLower(txtEntry), "spf") && !lastSPFRow {
+					mailRecord.SPFEntry = mailRecord.SPFEntry + removeWhitespaces(txtEntry)
+					isSPFRow = true
 				}
-			}
-			tld, _ := ExtractTLDAndSubdomainFromString(hostEntries[0])
-			/*if mailRecord.SPFEntry == "" {
-				if tld != hostEntries[0] {
-					for _, tldMxRecordNode := range allHostRecords {
-						if hostNames := utils.GetValuesFromNode(tldMxRecordNode, "host"); hostNames[0] == tld {
-							txtEntries = utils.GetValuesFromNode(tldMxRecordNode, "txt")
-							if len(txtEntries) > 0 {
-								for _, txtEntry := range txtEntries {
-									if strings.Contains(strings.ToLower(txtEntry), "spf") {
-										mailRecord.SPFEntry = removeWhitespaces(txtEntry)
-									}
-								}
-							}
-
-						}
-					}
+				if isSPFRow && strings.HasSuffix(strings.ToLower(txtEntry), "all") {
+					lastSPFRow = true
 				}
-			}*/
-			log.Debugf("Checking host dmarc entry for host %s", hostEntries[0])
-			p.getDMARCEntryForHost(hostEntries[0], &mailRecord, input)
-			if len(mailRecord.DMARCEntry) == 0 && (len(mailRecord.MXRecords) != 0 || len(mailRecord.DKIMEntries) != 0 || len(mailRecord.SPFEntry) != 0) {
-				log.Debugf("Checking TLD dmarc entry for host %s", hostEntries[0])
-				p.getDMARCEntryForHost(tld, &mailRecord, input)
-			}
-			// Check if an DMARC entry exists for the current host
-			/*dmarcEntries := utils.GetNodesFromSpecificQueryViaEquals(input, "host", "_dmarc."+tld)
-			for _, entry := range dmarcEntries {
-				txtDMARCEntry := utils.GetValuesFromNode(entry, "txt")
-				for _, txtEntry := range txtDMARCEntry {
-					if txtEntry != "" {
-						if strings.Contains(txtEntry, "DMARC") {
-							mailRecord.DMARCEntry = utils.AppendIfMissing(mailRecord.DMARCEntry, removeWhitespaces(txtEntry))
-						} else {
-							mailRecord.Infos = append(mailRecord.Infos, "DKIM entry illegally placed")
-
-							log.Infof("TXT record for %s contains invalid content: %s", "_dmarc."+tld, txtEntry)
-						}
-					}
+				if strings.Contains(strings.ToLower(txtEntry), "dkim") {
+					mailRecord.Infos = append(mailRecord.Infos, "DKIM entry illegally placed")
 				}
-			}*/
-			/*
-				dmarcEntries = utils.GetNodesFromSpecificQueryViaEquals(input, "host", "_dmarc."+hostEntries[0])
-				for _, entry := range dmarcEntries {
-					txtDMARCEntry := utils.GetValuesFromNode(entry, "txt")
-					for _, txtEntry := range txtDMARCEntry {
-						if txtEntry != "" {
-							if strings.Contains(txtEntry, "DMARC") {
-								log.Infof("Adding TLD dmarc entry for host %s", hostEntries[0])
-								mailRecord.DMARCEntry = utils.AppendIfMissing(mailRecord.DMARCEntry, removeWhitespaces(txtEntry))
-							} else {
-								mailRecord.Infos = utils.AppendIfHostMissing(mailRecord.Infos, "TXT record contains non DMARC content. Expected content would start with v=DMARC1")
-
-								log.Infof("TXT record for %s contains invalid content: %s", "_dmarc."+hostEntries[0], txtEntry)
-							}
-						}
-					}
-				}*/
-
-			dkimEntries := utils.GetAllEntriesByContains(input, "host", []string{"_domainkey." + hostEntries[0]})
-			if len(dkimEntries) > 0 {
-				var entries []DKIM
-				for _, dkimEntry := range dkimEntries {
-					if hostName, ok := dkimEntry.Value().(string); ok {
-						entry := DKIM{Selector: hostName}
-
-						txtValue := utils.GetValuesFromNode(dkimEntry.Parent, "txt")
-
-						if len(txtValue) > 0 {
-							entry.TXT = removeWhitespaces(strings.Join(txtValue, ""))
-						}
-						cnameValue := utils.GetValuesFromNode(dkimEntry.Parent, "cname")
-						if len(cnameValue) > 0 {
-							entry.CNAME = removeWhitespaces(strings.Join(cnameValue, ""))
-						}
-						if len(entry.CNAME) > 0 || len(entry.TXT) > 0 {
-							log.Infof("Adding DKIM entry for host %s", hostName)
-							entries = append(entries, entry)
-						}
-					} else {
-						log.Errorf("Found DKIM entry which couldn't be resolved to a host name. %s", dkimEntry)
-					}
+				if strings.Contains(strings.ToLower(txtEntry), "dmarc") {
+					mailRecord.Infos = append(mailRecord.Infos, "DMARC entry illegally placed")
 				}
-				if len(entries) > 0 {
-					mailRecord.DKIMEntries = entries
-				}
-			}
-			if !strings.HasPrefix(hostEntries[0], "_dmarc.") && !strings.Contains(hostEntries[0], "_domainkey.") && (len(mailRecord.MXRecords) != 0 || len(mailRecord.SPFEntry) != 0 || len(mailRecord.DKIMEntries) != 0) {
-				mailRecords[mailRecord.Host] = mailRecord
-				log.Infof("Added DNS record for host %s", mailRecord.Host)
-			} else if tld == hostEntries[0] {
-				mailRecords[mailRecord.Host] = mailRecord
-			} else {
-				log.Debugf("No mail relevant DNS record for host %s", hostEntries[0])
 			}
 		}
+		tld, _ := ExtractTLDAndSubdomainFromString(entry.Host)
+
+		log.Debugf("Checking DMARC entry for host %s", entry.Host)
+		p.getDMARCEntryForHost(entry.Host, &mailRecord, input)
+
+		log.Debugf("Checking DKIM entry for host %s", entry.Host)
+		p.getDKIMEntryForHost(entry.Host, &mailRecord, input)
+
+		if tld != entry.Host && len(mailRecord.DMARCEntry) == 0 && (len(mailRecord.MXRecords) != 0 || len(mailRecord.DKIMEntries) != 0 || len(mailRecord.SPFEntry) != 0) {
+			log.Debugf("Checking if a TLD %s DMARC entry exists for host %s", tld, entry.Host)
+			p.getDMARCEntryForHost(tld, &mailRecord, input)
+			mailRecord.Infos = append(mailRecord.Infos, "DMARC entries are taken from the top level domain")
+
+		}
+
+		if !strings.HasPrefix(entry.Host, "_dmarc.") && !strings.Contains(entry.Host, "_domainkey.") && (len(mailRecord.MXRecords) != 0 || len(mailRecord.SPFEntry) != 0 || len(mailRecord.DKIMEntries) != 0) {
+			mailRecords[entry.Host] = mailRecord
+			log.Infof("Added DNS record for host %s", entry.Host)
+		} else if tld == entry.Host && len(entry.Host) > 0 {
+			mailRecords[entry.Host] = mailRecord
+			log.Infof("Added DNS record for host %s", entry.Host)
+		} else {
+			log.Debugf("No mail relevant DNS record for host %s", entry.Host)
+		}
 	}
-	//}
-	/*
-		allHostRecords := utils.GetAllJSONNodesForKey(input, "host")
-		if len(allHostRecords) >= 1 {
-			// Fine, we found at least one. Now check if the other information (SPF, DMARC, DKIM) is available.
-			for _, hostRecordNode := range allHostRecords {
-				hostEntries := utils.GetValuesFromNode(hostRecordNode, "host")
 
-				if len(hostEntries) >= 1 {
-					tld, _ := ExtractTLDAndSubdomainFromString(hostEntries[0])
-					if tld == hostEntries[0] {
-						var mailRecord MailRecord
-						if _, ok := mailRecords[hostEntries[0]]; !ok {
-							mailRecord = MailRecord{
-								Host: hostEntries[0],
-							}
-						} else {
-							mailRecord = mailRecords[hostEntries[0]]
-						}
-						// Check if an DMARC entry exists for the current host
-						dmarcEntries := utils.GetNodesFromSpecificQueryViaEquals(input, "host", "_dmarc."+tld)
-						for _, entry := range dmarcEntries {
-							txtDMARCEntry := utils.GetValuesFromNode(entry, "txt")
-							for _, txtEntry := range txtDMARCEntry {
-								if txtEntry != "" {
-									if strings.Contains(txtEntry, "DMARC") {
-										log.Infof("Adding TLD dmarc entry for host %s", hostEntries[0])
-										mailRecord.DMARCEntry = utils.AppendIfMissing(mailRecord.DMARCEntry, removeWhitespaces(txtEntry))
-									} else {
-										log.Infof("TXT record for _dmarc.%s contains invalid conten: %s", "_dmarc."+tld, txtEntry)
-									}
-								}
-							}
-						}
-
-						dmarcEntries = utils.GetNodesFromSpecificQueryViaEquals(input, "host", "_dmarc."+hostEntries[0])
-						for _, entry := range dmarcEntries {
-							txtDMARCEntry := utils.GetValuesFromNode(entry, "txt")
-							for _, txtEntry := range txtDMARCEntry {
-								if txtEntry != "" {
-									if strings.Contains(txtEntry, "DMARC") {
-										log.Infof("Adding TLD dmarc entry for host %s", hostEntries[0])
-										mailRecord.DMARCEntry = utils.AppendIfMissing(mailRecord.DMARCEntry, removeWhitespaces(txtEntry))
-									} else {
-										log.Infof("TXT record for _dmarc.%s contains invalid conten: %s", "_dmarc."+tld, txtEntry)
-									}
-								}
-							}
-						}
-						mailRecords[mailRecord.Host] = mailRecord
-					}
-				}
-			}
-		}*/
 	var mxRecords []MailRecord
 	for _, record := range mailRecords {
 		mxRecords = append(mxRecords, record)
@@ -498,6 +374,57 @@ func (p *Processor) getDMARCEntryForHost(host string, record *MailRecord, input 
 
 					log.Infof("TXT record for %s contains invalid content: %s", "_dmarc."+host, txtEntry)
 				}
+			}
+		}
+	}
+}
+
+func (p *Processor) getDKIMEntryForHost(host string, record *MailRecord, input *jsonquery.Node) {
+	dkimEntries := utils.GetAllEntriesByContains(input, "host", []string{"_domainkey." + host})
+	if len(dkimEntries) > 0 {
+		var entries []DKIM
+		for _, dkimEntry := range dkimEntries {
+			if hostName, ok := dkimEntry.Value().(string); ok {
+				if !strings.HasPrefix(hostName, "thisshouldnot.work.") {
+					entry := DKIM{Selector: hostName}
+
+					txtValue := utils.GetValuesFromNode(dkimEntry.Parent, "txt")
+
+					if len(txtValue) > 0 {
+						entry.TXT = removeWhitespaces(strings.Join(txtValue, ""))
+					}
+					cnameValue := utils.GetValuesFromNode(dkimEntry.Parent, "cname")
+					if len(cnameValue) > 0 {
+						entry.CNAME = removeWhitespaces(strings.Join(cnameValue, ""))
+					}
+					if len(entry.CNAME) > 0 || len(entry.TXT) > 0 {
+						log.Infof("Adding DKIM entry for host %s", hostName)
+						entries = append(entries, entry)
+					}
+				} else {
+					log.Infof("Found wildcard DNS entry for DKIM. Not using entry for host %s", hostName)
+				}
+			} else {
+				log.Errorf("Found DKIM entry which couldn't be resolved to a host name. %s", dkimEntry)
+			}
+		}
+		if len(entries) > 0 {
+			record.DKIMEntries = entries
+		}
+	}
+}
+
+func (p *Processor) getDMARCEntryForDPUXEntry(host string, record *MailRecord, dpuxEntry DPUXEntry) {
+	txtDMARCEntry := dpuxEntry.TXT
+	for _, txtEntry := range txtDMARCEntry {
+		if txtEntry != "" {
+			if strings.Contains(txtEntry, "DMARC") {
+				log.Infof("Adding dmarc entry for host %s", host)
+				record.DMARCEntry = utils.AppendIfMissing(record.DMARCEntry, removeWhitespaces(txtEntry))
+			} else {
+				record.Infos = append(record.Infos, "DKIM entry illegally placed")
+
+				log.Infof("TXT record for %s contains invalid content: %s", "_dmarc."+host, txtEntry)
 			}
 		}
 	}

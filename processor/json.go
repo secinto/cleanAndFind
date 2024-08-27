@@ -117,36 +117,9 @@ func CreateSimpleDNSEntryFromDPUX(record *jsonquery.Node) DNSRecord {
 		var ip6Addresses []string
 		var cnames []string
 		host := entryValues["host"].(string)
-
-		if entries, ok := entryValues["a"].([]interface{}); ok {
-			for _, address := range entries {
-				if _, ok := address.(string); ok {
-					ip4Addresses = append(ip4Addresses, address.(string))
-				}
-			}
-		} else if entry, ok := entryValues["a"].(string); ok {
-			ip4Addresses = append(ip4Addresses, entry)
-		}
-
-		if entries, ok := entryValues["aaaa"].([]interface{}); ok {
-			for _, address := range entries {
-				if _, ok := address.(string); ok {
-					ip6Addresses = append(ip6Addresses, address.(string))
-				}
-			}
-		} else if entry, ok := entryValues["aaaa"].(string); ok {
-			ip6Addresses = append(ip6Addresses, entry)
-		}
-
-		if entry, ok := entryValues["cname"].(string); ok {
-			cnames = append(cnames, entry)
-		} else if entries, ok := entryValues["cname"].([]interface{}); ok {
-			for _, names := range entries {
-				if _, ok := names.(string); ok {
-					cnames = append(cnames, names.(string))
-				}
-			}
-		}
+		ip4Addresses = append(ip4Addresses, getValues("a", entryValues)...)
+		ip6Addresses = append(ip6Addresses, getValues("aaaa", entryValues)...)
+		cnames = append(cnames, getValues("cname", entryValues)...)
 
 		entry = DNSRecord{
 			Host:          host,
@@ -158,4 +131,32 @@ func CreateSimpleDNSEntryFromDPUX(record *jsonquery.Node) DNSRecord {
 		entry = DNSRecord{}
 	}
 	return entry
+}
+
+func GetDPUXEntry(record *jsonquery.Node) DPUXEntry {
+	var dpuxEntry DPUXEntry
+	if entryValues, ok := record.Value().(map[string]interface{}); ok {
+
+		dpuxEntry.Host = entryValues["host"].(string)
+		dpuxEntry.A = append(dpuxEntry.A, getValues("a", entryValues)...)
+		dpuxEntry.AAAA = append(dpuxEntry.AAAA, getValues("aaaa", entryValues)...)
+		dpuxEntry.CNAME = append(dpuxEntry.CNAME, getValues("cname", entryValues)...)
+		dpuxEntry.TXT = append(dpuxEntry.TXT, getValues("txt", entryValues)...)
+		dpuxEntry.MX = append(dpuxEntry.MX, getValues("mx", entryValues)...)
+	}
+	return dpuxEntry
+}
+
+func getValues(valueName string, entryValues map[string]interface{}) []string {
+	var values []string
+	if entry, ok := entryValues[valueName].(string); ok {
+		values = append(values, entry)
+	} else if entries, ok := entryValues[valueName].([]interface{}); ok {
+		for _, names := range entries {
+			if _, ok := names.(string); ok {
+				values = append(values, names.(string))
+			}
+		}
+	}
+	return values
 }
