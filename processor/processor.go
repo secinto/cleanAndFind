@@ -3,7 +3,7 @@ package processor
 import (
 	"encoding/json"
 	"github.com/antchfx/jsonquery"
-	"golang.org/x/exp/slices"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 	"os"
 	"reflect"
@@ -13,9 +13,9 @@ import (
 )
 
 var (
-	log           = utils.NewLogger()
+	log           = utils.NewLoggerWithLevel(logrus.DebugLevel)
 	appConfig     Config
-	wantedHosts   = []string{"www", "mail", "portal", "webmail", "dashboard", "login", "remote", "ssh"}
+	wantedHosts   = []string{"www", "mail", "portal", "webmail", "dashboard", "login", "remote", "ssh", "admin"}
 	unwantedHosts = []string{"autodiscover", "sip", "lyncdiscover", "owa", "www.autodiscover", "enterpriseenrollment", "enterpriseregistration", "_domainkey", "_dmarc", "msoid"}
 )
 
@@ -243,7 +243,7 @@ func (p *Processor) CleanDomains(mailRecords []MailRecord, makeCLeanedDNS bool) 
 				cleanedDomainsWithPorts = AppendIfHostMissing(cleanedDomainsWithPorts, host)
 			}
 		} else {
-			log.Infof("Not using ipAddress %s", host)
+			log.Infof("Not using IP %s", host)
 		}
 	}
 	log.Infof("Found %d non duplicate hosts without port", len(cleanedDomains))
@@ -471,11 +471,11 @@ func (p *Processor) deduplicateByContent(httpxInput *jsonquery.Node, ipaddress s
 	for _, hostEntry := range cleanAfterHash {
 		//Process each entry from cleanAfterHash array
 		//Generate the key for the current entry
-		key := strconv.Itoa(hostEntry.Words) + "-" + strconv.Itoa(hostEntry.Lines)
+		key := strconv.Itoa(hostEntry.Words) + "-" + strconv.Itoa(hostEntry.Lines) + "-" + hostEntry.Title
 		if len(cleanAfterHash) > 1 {
 			log.Debugf("Checking hostname %s", hostEntry.Input)
 			if _, ok := cleanAfterWordsAndLines[key]; !ok {
-				possibleDupes := getSimpleEntriesForMetrics(cleanAfterHash, hostEntry)
+				possibleDupes := getDuplicatesWithSlightDifference(cleanAfterHash, hostEntry, p.options.Project)
 				if len(possibleDupes) > 1 {
 					bestMatch := getBestDuplicateMatch(possibleDupes, p.options.Project, tlds)
 					if (bestMatch != SimpleHTTPXEntry{}) {
@@ -492,16 +492,30 @@ func (p *Processor) deduplicateByContent(httpxInput *jsonquery.Node, ipaddress s
 					}
 				} else {
 					//Only one entry exists, no duplicates, use it.
-					cleanAfterWordsAndLines[key] = hostEntry
+					if _, ok := cleanAfterWordsAndLines[key]; !ok {
+						cleanAfterWordsAndLines[key] = hostEntry
+					} else {
+						key = hostEntry.BodyHash
+						cleanAfterWordsAndLines[key] = hostEntry
+					}
 					processDuplicate(duplicates, hostEntry, key)
 				}
 			} else {
 				// All other are duplicates
+				if isHostExcludedFromDuplicateCheck(hostEntry.Input, p.options.Project) {
+					log.Debugf("Host %s is excluded from duplicate check!", hostEntry.Input)
+					key = hostEntry.BodyHash
+					cleanAfterWordsAndLines[key] = hostEntry
+				}
 				processDuplicate(duplicates, hostEntry, key)
 			}
 		} else {
-			/* If for this IP only one entry exists just use it. */
-			cleanAfterWordsAndLines[key] = hostEntry
+			if _, ok := cleanAfterWordsAndLines[key]; !ok {
+				cleanAfterWordsAndLines[key] = hostEntry
+			} else {
+				key = hostEntry.BodyHash
+				cleanAfterWordsAndLines[key] = hostEntry
+			}
 			processDuplicate(duplicates, hostEntry, key)
 		}
 	}
@@ -531,6 +545,7 @@ func getBestDuplicateMatch(entries []SimpleHTTPXEntry, project string, tlds map[
 	var possibleBestMatch SimpleHTTPXEntry
 	var host string
 	var port string
+
 	for _, entry := range entries {
 		host, port = utils.GetHostAndPort(entry.Input)
 		tld := utils.ExtractTLDFromString(host)
@@ -635,20 +650,26 @@ func getSimpleEntriesForBodyHash(entries []SimpleHTTPXEntry, bodyHash string) []
 	return filteredEntries
 }
 
-func getSimpleEntriesForMetrics(entries map[string]SimpleHTTPXEntry, match SimpleHTTPXEntry) []SimpleHTTPXEntry {
+func getDuplicatesWithSlightDifference(entries map[string]SimpleHTTPXEntry, match SimpleHTTPXEntry, project string) []SimpleHTTPXEntry {
 	var filteredEntries []SimpleHTTPXEntry
-	for _, entry := range entries {
-		var difference int
-		if entry.ContentLength >= match.ContentLength {
-			difference = entry.ContentLength - match.ContentLength
-		} else {
-			difference = match.ContentLength - entry.ContentLength
-		}
-		if entry.Words == match.Words && entry.Lines == match.Lines {
-			if difference > 50 {
-				log.Infof("Uses possible duplicate %s despite difference in length of %d", entry.Input, difference)
+	if isHostExcludedFromDuplicateCheck(match.Input, project) {
+		log.Debugf("Host %s is excluded from duplicate check!", match.Input)
+	} else {
+		for _, entry := range entries {
+			var difference int
+			if entry.ContentLength >= match.ContentLength {
+				difference = entry.ContentLength - match.ContentLength
+			} else {
+				difference = match.ContentLength - entry.ContentLength
 			}
-			filteredEntries = append(filteredEntries, entry)
+			if entry.Words == match.Words && entry.Lines == match.Lines {
+				if difference > 50 {
+					log.Infof("Uses possible duplicate %s despite difference in length of %d", entry.Input, difference)
+				}
+				if entry.Title == match.Title && !isHostExcludedFromDuplicateCheck(entry.Input, project) {
+					filteredEntries = append(filteredEntries, entry)
+				}
+			}
 		}
 	}
 	return filteredEntries
@@ -674,26 +695,6 @@ func processDuplicate(duplicates map[string]Duplicate, currentEntry SimpleHTTPXE
 		delete(duplicates, currentEntry.BodyHash)
 	}
 	duplicates[currentKey] = duplicate
-}
-
-func checkIfHostStringIsContained(host string, hostSlice []string, tld string) bool {
-	parts := strings.Split(host, ".")
-	if tld != "" {
-		tldParts := strings.Split(tld, ".")
-		if len(parts) > 0 && (len(parts) == len(tldParts)+1) {
-			if slices.Contains(hostSlice, parts[0]) {
-				return true
-			}
-		}
-	} else {
-		if len(parts) > 0 {
-			if slices.Contains(hostSlice, parts[0]) {
-				return true
-			}
-		}
-	}
-
-	return false
 }
 
 func createMapNonDuplicateForDuplicate(duplicates []Duplicate) map[string]string {

@@ -1,6 +1,7 @@
 package processor
 
 import (
+	"golang.org/x/exp/slices"
 	"reflect"
 	utils "secinto/checkfix_utils"
 	"strings"
@@ -106,4 +107,28 @@ func removeWhitespaces(entry string) string {
 	entry = strings.Replace(entry, "    ", " ", -1)
 	entry = strings.Replace(entry, "   ", " ", -1)
 	return strings.Replace(entry, "  ", " ", -1)
+}
+
+func isHostExcludedFromDuplicateCheck(host string, project string) bool {
+	return host == project || checkIfHostStringIsContained(host, wantedHosts, project)
+}
+
+func checkIfHostStringIsContained(host string, hostSlice []string, tld string) bool {
+	parts := strings.Split(host, ".")
+	if tld != "" {
+		tldParts := strings.Split(tld, ".")
+		if len(parts) > 0 && (len(parts) == len(tldParts)+1) {
+			if slices.Contains(hostSlice, parts[0]) {
+				return true
+			}
+		}
+	} else {
+		if len(parts) > 0 {
+			if slices.Contains(hostSlice, parts[0]) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
