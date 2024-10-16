@@ -3,7 +3,6 @@ package processor
 import (
 	"encoding/json"
 	"github.com/antchfx/jsonquery"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 	"os"
 	"reflect"
@@ -13,7 +12,7 @@ import (
 )
 
 var (
-	log           = utils.NewLoggerWithLevel(logrus.DebugLevel)
+	log           = utils.NewLogger()
 	appConfig     Config
 	wantedHosts   = []string{"www", "mail", "portal", "webmail", "dashboard", "login", "remote", "ssh", "admin"}
 	unwantedHosts = []string{"autodiscover", "sip", "lyncdiscover", "owa", "www.autodiscover", "enterpriseenrollment", "enterpriseregistration", "_domainkey", "_dmarc", "msoid"}
