@@ -14,22 +14,6 @@ var (
 	defaultSettingsLocation = filepath.Join(folderutil.HomeDirOrDefault("."), ".config/cleanAndFind/settings.yaml")
 )
 
-type Options struct {
-	SettingsFile    string
-	Project         string
-	File            string
-	BaseFolder      string
-	UniqueHostsFile string
-	OnlyClean       bool
-	OnlyDedup       bool
-	UseCleanedDNS   bool
-	Silent          bool
-	Version         bool
-	NoColor         bool
-	Verbose         bool
-	Debug           bool
-}
-
 // ParseOptions parses the command line flags provided by a user
 func ParseOptions() *Options {
 	options := &Options{}
@@ -49,6 +33,7 @@ func ParseOptions() *Options {
 	flagSet.CreateGroup("config", "Config",
 		flagSet.StringVarP(&options.SettingsFile, "config", "c", defaultSettingsLocation, "settings (Yaml) file location"),
 		flagSet.BoolVarP(&options.OnlyClean, "onlyClean", "oc", false, "only perform DNS file creation (no deduplication)"),
+		flagSet.BoolVarP(&options.OnlyMail, "onlyMail", "om", false, "only perform mail security extraction"),
 		flagSet.BoolVarP(&options.UseCleanedDNS, "useCleanedDNS", "ucd", false, "use the cleaned and deduplicated host information to create DNS file (dns_clean.json)"),
 	)
 

@@ -9,6 +9,23 @@ type Config struct {
 	DpuxIPFile       string `yaml:"dpux_ip,omitempty"`
 }
 
+type Options struct {
+	SettingsFile    string
+	Project         string
+	File            string
+	BaseFolder      string
+	UniqueHostsFile string
+	OnlyClean       bool
+	OnlyMail        bool
+	OnlyDedup       bool
+	UseCleanedDNS   bool
+	Silent          bool
+	Version         bool
+	NoColor         bool
+	Verbose         bool
+	Debug           bool
+}
+
 type Processor struct {
 	options *Options
 }

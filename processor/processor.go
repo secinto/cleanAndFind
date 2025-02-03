@@ -86,6 +86,11 @@ func (p *Processor) CleanAndFind() error {
 			if p.options.OnlyClean {
 				log.Infof("Creating dns_clean file from DPUx input.")
 				p.CleanDNSEntries()
+			} else if p.options.OnlyMail {
+				var mailRecords []MailRecord
+				log.Info("Obtaining all mail DNS entries for project")
+				mailRecords = p.FindMailRecords()
+				log.Infof("%d Mail information records have been found", len(mailRecords))
 			} else {
 				// Perform all functions.
 				var mailRecords []MailRecord
@@ -294,7 +299,7 @@ func (p *Processor) FindMailRecords() []MailRecord {
 		}
 
 		if len(entry.MX) > 0 {
-			mailRecord.MXRecords = entry.MX
+			mailRecord.MXRecords = utils.AppendIfMissingAll(mailRecord.MXRecords, entry.MX...)
 		}
 		// Check if the host has an SPF entry.
 		isSPFRow := false
